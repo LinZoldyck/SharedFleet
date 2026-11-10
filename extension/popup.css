@@ -1,0 +1,17 @@
+body { width: 360px; margin: 0; font: 14px/1.45 system-ui, sans-serif; color: #0f172a; }
+header { display: flex; justify-content: space-between; align-items: center; background: #0f172a; color: #fff; padding: 10px 14px; }
+header .link { color: #c7d2fe; }
+section, #status { padding: 0 14px; } #status { color: #64748b; margin: 10px 0; } #status.error { color: #b91c1c; }
+label { display: block; font-weight: 600; font-size: 12px; margin: 10px 0 4px; } label small { font-weight: 400; color: #64748b; }
+input { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #d5d9e3; border-radius: 8px; font: inherit; }
+button { font: inherit; border: 1px solid #e2e8f0; background: #fff; border-radius: 8px; padding: 8px 12px; cursor: pointer; font-weight: 600; width: 100%; margin: 8px 0; }
+button.primary { background: #4f46e5; border-color: #4f46e5; color: #fff; }
+button.link { border: 0; background: none; width: auto; padding: 0; margin: 0; color: #4f46e5; font-weight: 500; }
+h2 { font-size: 15px; margin: 8px 0; }
+.hint { color: #64748b; font-size: 12px; margin: 0 0 8px; }
+.fine { display: block; width: 100%; text-align: left; font-weight: 400; padding: 10px 12px; }
+.fine b { display: block; } .fine small { color: #64748b; }
+.tag { display: inline-block; border-radius: 999px; padding: 0 8px; font-size: 11px; font-weight: 600; background: #eef0f4; margin-left: 6px; }
+.tag.fps { background: #fef3c7; color: #a16207; }
+.row { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px solid #eef0f4; cursor: pointer; }
+.row:hover { background: #f8fafc; } .row span:first-child { color: #64748b; flex: none; } .row span:last-child { text-align: right; font-weight: 500; word-break: break-word; }

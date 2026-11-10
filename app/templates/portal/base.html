@@ -1,0 +1,17 @@
+{% from "_macros.html" import icon %}<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex">
+<title>{% block title %}Ma location{% endblock %}</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<div class="portal">
+  <div class="top"><span>{{ org.name if org else "Ma location" }}</span>
+    {% if b is defined %}<form method="post" action="/acces/quitter"><button class="btn small">Quitter</button></form>{% endif %}</div>
+  {% for kind, text in flashes %}<div class="flash {{ kind }}" role="status">{{ text }}</div>{% endfor %}
+  {% block content %}{% endblock %}
+</div>
+<script src="/static/app.js"></script>
+</body>
+</html>

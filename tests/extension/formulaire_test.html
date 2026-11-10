@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="fr"><meta charset="utf-8"><title>Formulaire de test — désignation</title>
+<!-- Formulaire fictif reprenant les libellés usuels d'une désignation de conducteur, pour tester l'extension hors ANTAI. -->
+<form>
+  <label for="a1">Numéro de l'avis de contravention *</label><input id="a1">
+  <label for="a2">Immatriculation du véhicule</label><input id="a2">
+  <label for="a3">Date de l'infraction</label><input id="a3" type="date">
+  <label>Nom de naissance <input name="nomNaissance"></label>
+  <label>Prénom <input name="prenom"></label>
+  <label for="b1">Date de naissance</label><input id="b1">
+  <label for="b0">Lieu de naissance</label><input id="b0">
+  <input aria-label="Numéro et libellé de la voie" name="voie">
+  <input placeholder="Code postal" name="cp"><input placeholder="Commune" name="commune">
+  <label for="p">Pays</label><select id="p"><option value="">—</option><option value="FR">France</option><option value="BE">Belgique</option></select>
+  <label for="c1">Numéro du permis de conduire</label><input id="c1">
+  <label for="c2">Date de délivrance du permis</label><input id="c2">
+  <label for="e">Adresse électronique (courriel)</label><input id="e" type="email">
+  <label for="d">Nom déjà saisi</label><input id="d" value="NE PAS ÉCRASER" name="nom_existant">
+  <label for="k">Recopiez le code de sécurité (captcha)</label><input id="k">
+  <label><input type="checkbox" name="certifie"> Je certifie l'exactitude des informations</label>
+  <button type="submit" id="go">Valider</button>
+</form>
+</html>

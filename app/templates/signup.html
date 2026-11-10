@@ -1,0 +1,14 @@
+{% extends "auth_base.html" %}{% from "_macros.html" import field %}
+{% block title %}Créer un compte · SharedFleet{% endblock %}
+{% block content %}
+<form class="card" method="post" action="/inscription">
+  <h1>Créer le compte de ma société</h1>
+  <p class="muted" style="margin:4px 0 16px">Vous en serez l'administrateur. Vous inviterez vos collaborateurs ensuite.</p>
+  {{ field("company", "Nom de la société", required=true, attrs='autofocus') }}
+  {{ field("name", "Votre nom", required=true) }}
+  {{ field("email", "E-mail", type="email", required=true, attrs='autocomplete="username"') }}
+  {{ field("password", "Mot de passe", type="password", required=true, help="10 caractères minimum.", attrs='minlength="10" autocomplete="new-password"') }}
+  <button class="btn primary big">Créer mon compte</button>
+</form>
+<p class="muted" style="text-align:center"><a href="/connexion">J'ai déjà un compte</a></p>
+{% endblock %}

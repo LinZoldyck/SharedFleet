@@ -1,0 +1,34 @@
+{% from "_macros.html" import icon %}<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}SharedFleet{% endblock %}</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+{% set path = request.url.path %}
+<div class="shell">
+  <nav class="side">
+    <a class="brand" href="/">{{ icon("logo") }}<span>SharedFleet</span></a>
+    {% for href, label, ic in [("/", "Pilotage", "home"), ("/locations", "Locations", "calendar"), ("/vehicules", "Véhicules", "truck"),
+                               ("/clients", "Clients", "users"), ("/messages", "Messages", "chat"), ("/contraventions", "Contraventions", "alert"),
+                               ("/factures", "Factures", "file"), ("/couts", "Coûts", "coins")] %}
+    <a class="nav {{ 'on' if (path == href if href == '/' else path.startswith(href)) }}" href="{{ href }}">{{ icon(ic) }}{{ label }}</a>
+    {% endfor %}
+    {% if user and user.role == "admin" %}<a class="nav {{ 'on' if path.startswith('/reglages') }}" href="/reglages">{{ icon("cog") }}Réglages</a>{% endif %}
+    {% if user %}
+    <div class="foot">
+      <div class="who"><b style="color:#fff">{{ user.name }}</b><br>{{ ROLES[user.role] }} · {{ user.org.name }}</div>
+      <form method="post" action="/deconnexion"><button>Se déconnecter</button></form>
+    </div>
+    {% endif %}
+  </nav>
+  <main class="main">
+    {% for kind, text in flashes %}<div class="flash {{ kind }}" role="status">{{ text }}</div>{% endfor %}
+    {% block content %}{% endblock %}
+  </main>
+</div>
+<div class="tip" id="tip"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>

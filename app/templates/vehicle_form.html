@@ -1,0 +1,26 @@
+{% extends "base.html" %}{% from "_macros.html" import field %}
+{% block title %}{{ v.name or "Nouveau véhicule" }} · SharedFleet{% endblock %}
+{% block content %}
+<div class="head"><h1>{{ v.name or "Nouveau véhicule" }}</h1></div>
+<form class="card" method="post" action="/vehicules/{{ v.id or 0 }}" style="max-width:720px">
+  <div class="grid g2">
+    {{ field("name", "Nom d'usage", v.name, required=true, placeholder="Master 12 m³") }}
+    {{ field("plate", "Immatriculation", v.plate, required=true, placeholder="AB-123-CD", help="Sert à relier le véhicule à Getaround et aux contraventions.") }}
+    {{ field("brand", "Marque", v.brand, placeholder="Renault") }}
+    {{ field("model", "Modèle", v.model, placeholder="Master L2H2") }}
+  </div>
+  {{ field("address", "Lieu de prise en charge", v.address, placeholder="12 rue des Entrepreneurs, 69007 Lyon") }}
+  {{ field("lock_code", "Code du Master Lock (boîte à clés)", v.lock_code, help="Montré au client uniquement après saisie de son code d'accès reçu par SMS.", attrs='autocomplete="off"') }}
+  <h2 style="margin-top:8px">Location directe</h2>
+  <div class="grid g2">
+    {{ field("daily_rate", "Tarif HT par jour (€)", v.daily_rate, attrs='inputmode="decimal"') }}
+    {{ field("deposit", "Dépôt de garantie (€)", v.deposit, attrs='inputmode="decimal"') }}
+    {{ field("km_included", "Km inclus par jour", v.km_included, type="number", attrs='min="0"', help="0 = kilométrage illimité.") }}
+    {{ field("extra_km_price", "Km supplémentaire HT (€)", v.extra_km_price, attrs='inputmode="decimal"') }}
+  </div>
+  <h2 style="margin-top:8px">Rentabilité</h2>
+  {{ field("monthly_cost", "Coûts fixes mensuels HT (€)", v.monthly_cost, help="Loyer ou amortissement, assurance, boîtier, parking… Utilisé pour la marge du tableau de bord.", attrs='inputmode="decimal"') }}
+  <label class="check field"><input type="checkbox" name="active" {{ 'checked' if v.active or not v.id }}> Véhicule actif (proposé à la location et compté dans le tableau de bord)</label>
+  {% if user.role != "viewer" %}<div class="actions"><button class="btn primary">Enregistrer</button><a class="btn" href="/vehicules">Annuler</a></div>{% endif %}
+</form>
+{% endblock %}

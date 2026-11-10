@@ -1,0 +1,92 @@
+{% extends "base.html" %}{% from "_macros.html" import badge, source, field %}
+{% block title %}{{ b.reference }} · SharedFleet{% endblock %}
+
+{% macro inspection_card(kind, title) %}
+{% set i = b.inspection(kind) %}
+<div class="card">
+  <h2>{{ title }} {% if i %}<span class="badge green">fait le {{ i.created_at|dt }}</span>{% else %}<span class="badge gray">à faire</span>{% endif %}</h2>
+  {% if i %}
+  <dl class="kv" style="margin-bottom:12px"><dt>Kilométrage</dt><dd class="num">{{ i.mileage if i.mileage is not none else "—" }} km</dd>
+    <dt>Carburant</dt><dd>{{ i.fuel_level if i.fuel_level is not none else "—" }} %</dd><dt>Observations</dt><dd>{{ i.notes or "Aucune réserve" }}</dd></dl>
+  <div class="photos">{% for ph in i.photos %}<a href="/media/{{ ph.path }}" target="_blank"><img src="/media/{{ ph.path }}" loading="lazy" alt="Photo {{ 'extérieur' if ph.category == 'exterior' else 'intérieur' }}"></a>{% endfor %}</div>
+  {% elif b.source == "direct" and b.status != "cancelled" and user.role != "viewer" %}
+  <p class="muted">Le client le réalise depuis son téléphone. Vous pouvez aussi le saisir vous-même :</p>
+  <details><summary class="btn small">Saisir l'état des lieux</summary>
+    <form method="post" action="/locations/{{ b.id }}/etat-des-lieux/{{ kind }}" enctype="multipart/form-data" style="margin-top:12px">
+      <div class="grid g2">{{ field("mileage", "Kilométrage", type="number", attrs='min="0"') }}{{ field("fuel_level", "Carburant (%)", type="number", attrs='min="0" max="100"') }}</div>
+      <div class="field"><label>Photos extérieur</label><input type="file" name="exterior" accept="image/*" multiple></div>
+      <div class="field"><label>Photos intérieur</label><input type="file" name="interior" accept="image/*" multiple></div>
+      <div class="field"><label>Observations</label><textarea name="notes"></textarea></div>
+      <button class="btn primary">Enregistrer</button>
+    </form></details>
+  {% else %}<p class="muted">{{ "Réalisé dans l'application Getaround par le locataire." if b.source == "getaround" else "Non réalisé." }}</p>{% endif %}
+</div>
+{% endmacro %}
+
+{% block content %}
+<div class="head">
+  <div><h1>{{ b.reference }} {{ source(b) }} {{ badge(b.status) }}</h1>
+    <div class="sub">{{ b.vehicle.label }} · {{ b.starts_at|dt }} → {{ b.ends_at|dt }}</div></div>
+  <div class="actions">
+    {% if b.source == "direct" %}<a class="btn primary" href="/locations/{{ b.id }}/contrat.pdf" target="_blank">Contrat PDF</a>{% endif %}
+    {% if b.source == "direct" and b.status in ("confirmed", "in_progress") and user.role != "viewer" %}
+    <form method="post" action="/locations/{{ b.id }}/annuler" data-confirm="Annuler cette location ?"><button class="btn danger">Annuler</button></form>{% endif %}
+  </div>
+</div>
+
+<div class="grid g2">
+  <div class="card">
+    <h2>Location</h2>
+    <dl class="kv">
+      <dt>Véhicule</dt><dd><a href="/vehicules/{{ b.vehicle.id }}">{{ b.vehicle.label }}</a></dd>
+      <dt>Durée</dt><dd>{{ b.days }} jour(s)</dd>
+      <dt>{{ "Revenu propriétaire" if b.source == "getaround" else "Prix HT" }}</dt><dd class="num">{{ b.price_ht|eur }}</dd>
+      {% if b.source == "direct" %}<dt>Prix TTC</dt><dd class="num">{{ b.price_ttc|eur }} (TVA {{ "%g"|format(b.vat_rate) }} %)</dd>
+      <dt>Km inclus</dt><dd>{{ b.km_included }} km</dd><dt>Dépôt de garantie</dt><dd class="num">{{ b.deposit|eur }}</dd>
+      <dt>Contrat</dt><dd>{% if b.accepted_at %}Accepté par {{ b.accepted_by }} le {{ b.accepted_at|dt }}{% else %}En attente d'acceptation{% endif %}</dd>{% endif %}
+      {% if b.notes %}<dt>Conditions</dt><dd>{{ b.notes }}</dd>{% endif %}
+    </dl>
+  </div>
+  <div class="card">
+    <h2>{{ "Conducteur" if b.source == "getaround" else "Client" }}</h2>
+    {% set c = b.customer %}
+    {% if c %}<dl class="kv">
+      <dt>Nom</dt><dd><a href="/clients/{{ c.id }}">{{ c.label }}</a>{% if c.company_name and c.person %} — {{ c.person }}{% endif %}</dd>
+      <dt>Téléphone</dt><dd>{{ c.phone or "—" }}</dd><dt>E-mail</dt><dd>{{ c.email or "—" }}</dd>
+      <dt>Adresse</dt><dd>{{ c.address }} {{ c.postal_code }} {{ c.city }}</dd>
+      <dt>Permis</dt><dd>{{ c.license_number or "—" }}</dd></dl>
+    {% else %}<p class="muted">Conducteur non communiqué par Getaround.</p>{% endif %}
+  </div>
+</div>
+
+{% if b.source == "direct" %}
+<div class="grid g2">
+  <div class="card">
+    <h2>Accès du client</h2>
+    <dl class="kv">
+      <dt>Code d'accès</dt><dd><span class="mono">{{ b.access_code }}</span></dd>
+      <dt>SMS</dt><dd>{% if b.code_sent_at %}Envoyé le {{ b.code_sent_at|dt }}{% else %}Envoi automatique 30 min avant le départ{% endif %}</dd>
+      <dt>Boîte à clés</dt><dd><span class="mono">{{ b.vehicle.lock_code or "non renseigné" }}</span></dd>
+      <dt>Page client</dt><dd><span class="mono">{{ config.BASE_URL }}/acces</span></dd>
+    </dl>
+    {% if user.role != "viewer" and b.status in ("confirmed", "in_progress") %}
+    <form method="post" action="/locations/{{ b.id }}/code" style="margin-top:12px"><button class="btn small">{{ "Renvoyer" if b.code_sent_at else "Envoyer" }} le code par SMS maintenant</button></form>{% endif %}
+    {% if not b.vehicle.lock_code %}<div class="note warn">Renseignez le code du Master Lock sur la <a href="/vehicules/{{ b.vehicle.id }}">fiche du véhicule</a>.</div>{% endif %}
+  </div>
+  <div class="card">
+    <h2>Facturation</h2>
+    {% for inv in b.invoices %}
+    <p><a href="/factures/{{ inv.id }}/pdf" target="_blank"><b>{{ inv.number or "Brouillon" }}</b></a> · {{ inv.amount_ttc|eur }} TTC · {{ provider[inv.provider] }} {{ badge(inv.status) }}</p>
+    {% else %}
+    <table style="margin-bottom:12px">{% for l in lines %}<tr><td style="padding:6px 0">{{ l.label }}</td><td class="r num" style="padding:6px 0;white-space:nowrap">{{ (l.quantity * l.unit_price)|eur }}</td></tr>{% endfor %}</table>
+    {% if user.role != "viewer" %}<form method="post" action="/locations/{{ b.id }}/facturer"><button class="btn primary small">Créer la facture</button></form>{% endif %}
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<div class="grid g2">
+  {{ inspection_card("checkin", "État des lieux de départ") }}
+  {{ inspection_card("checkout", "État des lieux de retour") }}
+</div>
+{% endblock %}

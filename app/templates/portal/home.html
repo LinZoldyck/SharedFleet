@@ -1,0 +1,49 @@
+{% extends "portal/base.html" %}
+{% block content %}
+{% set cin = b.inspection("checkin") %}{% set cout = b.inspection("checkout") %}
+<ol class="steps">
+  <li class="{{ 'done' if cin else 'cur' }}">1. Départ</li>
+  <li class="{{ 'done' if cout else 'cur' if cin else '' }}">2. Location</li>
+  <li class="{{ 'done' if cout else '' }}">3. Retour</li>
+</ol>
+
+<div class="card">
+  <b style="font-size:1.1rem">{{ b.vehicle.brand }} {{ b.vehicle.model }}</b> <span class="mono">{{ b.vehicle.plate }}</span>
+  <dl class="kv" style="margin-top:10px">
+    <dt>Départ</dt><dd>{{ b.starts_at|dt }}</dd><dt>Retour</dt><dd>{{ b.ends_at|dt }}</dd>
+    {% if b.vehicle.address %}<dt>Adresse</dt><dd>{{ b.vehicle.address }}</dd>{% endif %}
+    <dt>Km inclus</dt><dd>{{ b.km_included if b.km_included else "Illimité" }}{{ " km" if b.km_included }}</dd>
+  </dl>
+  <a class="btn" href="/acces/contrat.pdf" target="_blank" style="margin-top:12px;width:100%">Lire mon contrat de location (PDF)</a>
+</div>
+
+{% if not cout %}
+<div class="card">
+  <h2>{{ "Récupérer les clés" if not cin else "Boîte à clés" }}</h2>
+  <p class="muted">Les clés sont dans la boîte à clés Master Lock accrochée au véhicule. Composez ce code :</p>
+  <div class="lockcode" aria-label="Code de la boîte à clés">{{ b.vehicle.lock_code or "—" }}</div>
+</div>
+{% endif %}
+
+{% if not cin %}
+<div class="card">
+  <h2>Avant de partir : l'état des lieux</h2>
+  <p class="muted">Quelques photos, le kilométrage et le niveau de carburant. Cela vous protège : 2 minutes suffisent.</p>
+  <a class="btn primary big" href="/acces/etat-des-lieux/checkin">Faire l'état des lieux de départ</a>
+</div>
+{% elif not cout %}
+<div class="card">
+  <h2>Location en cours</h2>
+  <p>État des lieux de départ enregistré le {{ cin.created_at|dt }} ({{ cin.mileage }} km). Bonne route !</p>
+  <p class="muted">Au retour : garez le véhicule à son emplacement, puis faites l'état des lieux de retour avant de remettre les clés dans la boîte.</p>
+  <a class="btn primary big" href="/acces/etat-des-lieux/checkout">Terminer ma location</a>
+</div>
+{% else %}
+<div class="card">
+  <h2>Dernière étape : rendre les clés</h2>
+  <p>Replacez les clés dans la boîte à clés, refermez-la avec ce code puis brouillez les molettes :</p>
+  <div class="lockcode">{{ b.vehicle.lock_code or "—" }}</div>
+  <p><b>Merci et à bientôt !</b> Vous avez parcouru {{ cout.mileage - cin.mileage if cin.mileage is not none and cout.mileage is not none else "—" }} km. Votre contrat complet, avec les photos de départ et de retour, reste téléchargeable ci-dessus.</p>
+</div>
+{% endif %}
+{% endblock %}

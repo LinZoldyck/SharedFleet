@@ -1,0 +1,13 @@
+{% extends "auth_base.html" %}{% from "_macros.html" import field %}
+{% block title %}Connexion · SharedFleet{% endblock %}
+{% block content %}
+<form class="card" method="post" action="/connexion">
+  <h1 style="margin-bottom:16px">Connexion</h1>
+  {{ field("email", "E-mail", type="email", required=true, attrs='autocomplete="username" autofocus') }}
+  {{ field("password", "Mot de passe", type="password", required=true, attrs='autocomplete="current-password"') }}
+  <button class="btn primary big">Se connecter</button>
+</form>
+<p class="muted" style="text-align:center">
+  {% if signup %}<a href="/inscription">Créer le compte de ma société</a> · {% endif %}<a href="/acces">Je suis locataire</a>
+</p>
+{% endblock %}

@@ -1,0 +1,40 @@
+{% extends "base.html" %}{% from "_macros.html" import badge %}
+{% block title %}Messages · SharedFleet{% endblock %}
+{% block content %}
+<div class="head">
+  <div><h1>Messages Getaround</h1><div class="sub">
+    {% if not connected %}Getaround n'est pas encore connecté.
+    {% elif not ai_ready or mode == "off" %}Assistant désactivé : vous répondez vous-même.
+    {% elif mode == "auto" %}Assistant en mode automatique : il répond aux questions simples et vous laisse les décisions.
+    {% else %}Assistant en mode brouillon : il prépare les réponses, vous les validez.{% endif %}
+    {% if user.role == "admin" %}<a href="/reglages#assistant">Régler</a>{% endif %}</div></div>
+  <div class="actions">
+    <div class="tabs"><a class="{{ 'on' if f == 'ouverts' }}" href="/messages">À traiter</a><a class="{{ 'on' if f != 'ouverts' }}" href="/messages?f=tous">Tous</a></div>
+    <form method="post" action="/getaround/synchroniser"><button class="btn">Relever les messages</button></form>
+  </div>
+</div>
+{% for m in messages %}
+<div class="card">
+  <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">
+    <div><b>{{ m.booking.customer.label if m.booking.customer else "Locataire" }}</b> · <a href="/locations/{{ m.booking.id }}">{{ m.booking.reference }}</a> · {{ m.booking.vehicle.name }}
+      <br><small>Location du {{ m.booking.starts_at|dt }} au {{ m.booking.ends_at|dt }}</small></div>
+    <div>{{ badge(m.status) }}</div>
+  </div>
+  <div class="thread">{% for t in threads[m.id][-6:] %}
+    <div class="bubble {{ 'out' if t.direction == 'out' }}"><div class="meta">{{ "Locataire" if t.direction == "in" else ("Assistant" if t.by_ai else "Vous") }} · {{ t.sent_at|dt }}</div>{{ t.content }}</div>{% endfor %}
+  </div>
+  {% if m.ai_reason and m.status in ("escalated", "draft") %}
+  <div class="note {{ 'warn' if m.status == 'escalated' }}"><b>{{ "L'assistant vous laisse la main" if m.status == "escalated" else "Analyse de l'assistant" }} :</b> {{ m.ai_reason }}</div>{% endif %}
+  {% if m.status in ("new", "draft", "escalated") and user.role != "viewer" %}
+  <form method="post" action="/messages/{{ m.id }}/repondre">
+    <div class="field"><label for="text{{ m.id }}">{{ "Réponse proposée — modifiez-la si besoin" if m.ai_draft else "Votre réponse" }}</label>
+      <textarea id="text{{ m.id }}" name="text" maxlength="2000" required>{{ m.ai_draft }}</textarea></div>
+    <div class="actions"><button class="btn primary">Envoyer sur Getaround</button>
+      <button class="btn" formaction="/messages/{{ m.id }}/traite" formnovalidate>Marquer comme traité</button></div>
+  </form>{% endif %}
+</div>
+{% else %}
+<div class="card empty"><b>{{ "Rien à traiter" if connected else "Connectez Getaround" }}</b>
+  {% if connected %}Les nouveaux messages de vos locataires apparaîtront ici.{% else %}Renseignez votre jeton d'API dans les <a href="/reglages#getaround">réglages</a>.{% endif %}</div>
+{% endfor %}
+{% endblock %}

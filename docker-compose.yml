@@ -1,0 +1,11 @@
+# Déploiement sur le Raspberry :  docker compose up -d --build
+services:
+  sharedfleet:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "8000:8000"
+    volumes:
+      # Base SQLite, photos, logo et dossier de dépôt des contraventions (à sauvegarder)
+      - ./data:/data

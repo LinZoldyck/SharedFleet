@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Clients · SharedFleet{% endblock %}
+{% block content %}
+<div class="head"><div><h1>Clients</h1><div class="sub">Vos clients directs et les conducteurs Getaround</div></div>
+  <div class="actions"><form method="get"><input type="search" name="q" value="{{ q }}" placeholder="Rechercher…" aria-label="Rechercher un client"></form>
+  <a class="btn primary" href="/clients/nouveau">+ Nouveau client</a></div></div>
+<div class="card flush"><div class="scroll">
+{% if customers %}
+<table><thead><tr><th>Client</th><th>Contact</th><th>Téléphone</th><th>Ville</th><th>Origine</th></tr></thead>
+<tbody>{% for c in customers %}<tr class="link" data-href="/clients/{{ c.id }}">
+  <td><a href="/clients/{{ c.id }}"><b>{{ c.label }}</b></a></td><td>{{ c.person if c.company_name else c.email }}</td><td>{{ c.phone }}</td><td>{{ c.city }}</td>
+  <td>{% if c.getaround_user_id %}<span class="badge blue">Getaround</span>{% else %}<span class="badge amber">Direct</span>{% endif %}</td></tr>{% endfor %}</tbody></table>
+{% else %}<div class="empty"><b>Aucun client</b>Ajoutez votre premier client professionnel.</div>{% endif %}
+</div></div>
+{% endblock %}

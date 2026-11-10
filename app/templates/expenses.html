@@ -1,0 +1,24 @@
+{% extends "base.html" %}{% from "_macros.html" import field %}
+{% block title %}Coûts · SharedFleet{% endblock %}
+{% block content %}
+<div class="head"><div><h1>Coûts</h1><div class="sub">Dépenses variables. Les coûts fixes mensuels se règlent sur chaque véhicule.</div></div></div>
+{% if user.role != "viewer" %}
+<form class="card" method="post" action="/couts">
+  <div class="inline">
+    <div><label for="spent_on">Date</label><input type="date" id="spent_on" name="spent_on" value="{{ today }}" required></div>
+    <div><label for="category">Catégorie</label><select id="category" name="category">{% for c in categories %}<option>{{ c }}</option>{% endfor %}</select></div>
+    <div><label for="vehicle_id">Véhicule</label><select id="vehicle_id" name="vehicle_id"><option value="">Toute la flotte</option>{% for v in vehicles %}<option value="{{ v.id }}">{{ v.name }}</option>{% endfor %}</select></div>
+    <div><label for="amount">Montant HT (€)</label><input type="text" id="amount" name="amount" inputmode="decimal" required></div>
+    <div style="flex:2"><label for="label">Libellé</label><input type="text" id="label" name="label" placeholder="Plein, vidange…"></div>
+    <button class="btn primary">Ajouter</button>
+  </div>
+</form>
+{% endif %}
+<div class="card flush"><div class="scroll">
+{% if expenses %}
+<table><thead><tr><th>Date</th><th>Catégorie</th><th>Véhicule</th><th>Libellé</th><th class="r">Montant HT</th><th></th></tr></thead>
+<tbody>{% for e in expenses %}<tr><td>{{ e.spent_on|date }}</td><td>{{ e.category }}</td><td>{{ e.vehicle.name if e.vehicle else "Flotte" }}</td><td>{{ e.label }}</td><td class="r num">{{ e.amount|eur }}</td>
+  <td class="r">{% if user.role != "viewer" %}<form method="post" action="/couts/{{ e.id }}/supprimer" data-confirm="Supprimer ce coût ?"><button class="btn small danger">Supprimer</button></form>{% endif %}</td></tr>{% endfor %}</tbody></table>
+{% else %}<div class="empty"><b>Aucun coût saisi</b>Ajoutez vos dépenses pour suivre la rentabilité réelle de chaque véhicule.</div>{% endif %}
+</div></div>
+{% endblock %}

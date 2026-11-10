@@ -1,0 +1,30 @@
+{% extends "base.html" %}{% from "_macros.html" import badge %}
+{% block title %}Contraventions · SharedFleet{% endblock %}
+{% block content %}
+<div class="head">
+  <div><h1>Contraventions</h1><div class="sub">Déposez l'avis : l'application retrouve la location et le conducteur.</div></div>
+  <div class="tabs"><a class="{{ 'on' if f == 'ouvertes' }}" href="/contraventions">À traiter</a><a class="{{ 'on' if f != 'ouvertes' }}" href="/contraventions?f=toutes">Toutes</a></div>
+</div>
+{% if user.role != "viewer" %}
+<form class="card" method="post" action="/contraventions" enctype="multipart/form-data">
+  <div class="drop">
+    <b>Déposer des avis (PDF ou photo)</b>
+    <div class="muted">ou copiez-les dans le dossier <span class="mono">{{ inbox }}</span> : il est relevé toutes les 2 minutes.</div>
+    <input type="file" name="files" accept=".pdf,image/*" multiple required> <button class="btn primary small">Lire les avis</button>
+  </div>
+  {% if not ai_ready %}<div class="note warn" style="margin-bottom:0">Sans clé d'API Claude, seuls les PDF contenant du texte sont lus (pas les photos ni les scans). <a href="/reglages#assistant">Ajouter la clé</a></div>{% endif %}
+</form>
+{% endif %}
+<div class="card flush"><div class="scroll">
+{% if fines %}
+<table><thead><tr><th>Avis</th><th>Type</th><th>Véhicule</th><th>Infraction</th><th>Location</th><th class="r">Montant</th><th>Statut</th></tr></thead>
+<tbody>{% for x in fines %}<tr class="link" data-href="/contraventions/{{ x.id }}">
+  <td><a href="/contraventions/{{ x.id }}"><b>{{ x.notice_number or "N° illisible" }}</b></a><br><small>reçu le {{ x.created_at|date }}</small></td>
+  <td><span class="badge {{ 'amber' if x.kind == 'fps' else 'gray' }}">{{ "FPS" if x.kind == "fps" else "Amende" }}</span></td>
+  <td>{{ x.vehicle.name if x.vehicle else (x.plate or "—") }}</td>
+  <td>{{ x.offense_at|dt }}<br><small>{{ x.offense_type }}</small></td>
+  <td>{% if x.booking %}<a href="/locations/{{ x.booking.id }}">{{ x.booking.reference }}</a><br><small>{{ x.booking.customer.label if x.booking.customer }}</small>{% else %}—{% endif %}</td>
+  <td class="r num">{{ x.amount|eur }}</td><td>{{ badge(x.status) }}</td></tr>{% endfor %}</tbody></table>
+{% else %}<div class="empty"><b>Aucune contravention à traiter</b>Bonne nouvelle.</div>{% endif %}
+</div></div>
+{% endblock %}

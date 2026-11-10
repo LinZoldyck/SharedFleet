@@ -1,0 +1,27 @@
+{% extends "base.html" %}{% from "_macros.html" import field %}
+{% block title %}Nouvelle location · SharedFleet{% endblock %}
+{% block content %}
+<div class="head"><div><h1>Nouvelle location directe</h1><div class="sub">Le contrat est généré automatiquement ; le client reçoit son code par SMS 30 minutes avant le départ.</div></div></div>
+{% if not vehicles or not customers %}
+<div class="card empty"><b>Il manque {{ "un véhicule" if not vehicles else "un client" }}</b>
+  <a class="btn primary" href="{{ '/vehicules/nouveau' if not vehicles else '/clients/nouveau' }}">Ajouter {{ "un véhicule" if not vehicles else "un client" }}</a></div>
+{% else %}
+<form class="card" method="post" action="/locations" style="max-width:680px">
+  <div class="field"><label for="vehicle_id">Véhicule</label>
+    <select id="vehicle_id" name="vehicle_id" required>{% for v in vehicles %}<option value="{{ v.id }}" data-rate="{{ v.daily_rate }}">{{ v.label }} — {{ v.daily_rate|eur }} HT / jour</option>{% endfor %}</select></div>
+  <div class="field"><label for="customer_id">Client</label>
+    <div class="inline"><select id="customer_id" name="customer_id" required>{% for c in customers %}<option value="{{ c.id }}" {{ 'selected' if c.id == customer_id }}>{{ c.label }}{% if c.company_name and c.person %} ({{ c.person }}){% endif %}</option>{% endfor %}</select>
+      <a class="btn" href="/clients/nouveau?back=booking">+ Nouveau client</a></div></div>
+  <div class="grid g2">
+    {{ field("starts_at", "Départ", start.strftime("%Y-%m-%dT%H:%M"), type="datetime-local", required=true) }}
+    {{ field("ends_at", "Retour", end.strftime("%Y-%m-%dT%H:%M"), type="datetime-local", required=true) }}
+  </div>
+  <div class="grid g2">
+    {{ field("price_ht", "Prix total HT (€)", optional=true, placeholder="Calculé d'après le tarif journalier", help="Laissez vide pour appliquer le tarif du véhicule.", attrs='inputmode="decimal"') }}
+    <div class="field"><label for="vat_rate">TVA</label><select id="vat_rate" name="vat_rate"><option value="20">20 %</option><option value="0">0 % (non assujetti)</option></select></div>
+  </div>
+  <div class="field"><label for="notes">Conditions particulières <span class="opt">(facultatif, imprimées sur le contrat)</span></label><textarea id="notes" name="notes"></textarea></div>
+  <div class="actions"><button class="btn primary">Créer la location et le contrat</button><a class="btn" href="/locations">Annuler</a></div>
+</form>
+{% endif %}
+{% endblock %}

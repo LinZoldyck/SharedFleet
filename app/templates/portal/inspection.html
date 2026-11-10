@@ -1,0 +1,34 @@
+{% extends "portal/base.html" %}
+{% block content %}
+<h1 style="margin-bottom:4px">{{ "État des lieux de départ" if kind == "checkin" else "État des lieux de retour" }}</h1>
+<p class="muted">{{ b.vehicle.brand }} {{ b.vehicle.model }} · {{ b.vehicle.plate }}</p>
+<form method="post" action="/acces/etat-des-lieux/{{ kind }}" enctype="multipart/form-data">
+  <div class="card">
+    <h2>1. Photos de l'extérieur</h2>
+    <div class="drop"><b>4 photos minimum</b><div class="muted">Avant, arrière, côté gauche, côté droit — et chaque dégât visible.</div>
+      <input type="file" name="exterior" accept="image/*" multiple required data-preview="pv_ext"></div>
+    <div class="previews" id="pv_ext"></div>
+  </div>
+  <div class="card">
+    <h2>2. Photos de l'intérieur</h2>
+    <div class="drop"><b>1 photo minimum</b><div class="muted">Cabine, zone de chargement, tableau de bord allumé.</div>
+      <input type="file" name="interior" accept="image/*" multiple required data-preview="pv_int"></div>
+    <div class="previews" id="pv_int"></div>
+  </div>
+  <div class="card">
+    <h2>3. Compteur et carburant</h2>
+    <div class="field"><label for="mileage">Kilométrage au compteur</label><input type="number" id="mileage" name="mileage" inputmode="numeric" min="0" required></div>
+    <div class="field"><label for="fuel_level">Niveau de carburant : <span id="fuel_out"></span></label>
+      <input type="range" id="fuel_level" name="fuel_level" min="0" max="100" step="5" value="100" data-out="fuel_out"></div>
+    <div class="field"><label for="notes">Observations <span class="opt">(facultatif)</span></label><textarea id="notes" name="notes" placeholder="Rayure portière droite, voyant allumé…"></textarea></div>
+  </div>
+  {% if kind == "checkin" %}
+  <div class="card">
+    <h2>4. Acceptation du contrat</h2>
+    <div class="field"><label for="signed_name">Votre nom et prénom</label><input type="text" id="signed_name" name="signed_name" autocomplete="name" required></div>
+    <label class="check"><input type="checkbox" name="accept" required> <span>J'ai lu et j'accepte le <a href="/acces/contrat.pdf" target="_blank">contrat de location</a> et je certifie l'exactitude de cet état des lieux.</span></label>
+  </div>
+  {% endif %}
+  <button class="btn primary big">{{ "Valider et démarrer la location" if kind == "checkin" else "Valider le retour du véhicule" }}</button>
+</form>
+{% endblock %}

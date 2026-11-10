@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Véhicules · SharedFleet{% endblock %}
+{% block content %}
+<div class="head"><div><h1>Véhicules</h1><div class="sub">Votre flotte, ses tarifs et ses coûts fixes</div></div>
+  <a class="btn primary" href="/vehicules/nouveau">+ Ajouter un véhicule</a></div>
+{% if vehicles %}
+<div class="grid g3">{% for v in vehicles %}
+  <a class="card" href="/vehicules/{{ v.id }}" style="color:inherit;text-decoration:none;margin:0">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+      <div><b style="font-size:1.05rem">{{ v.name }}</b><br><span class="muted">{{ v.brand }} {{ v.model }}</span></div>
+      <span class="mono">{{ v.plate }}</span></div>
+    <dl class="kv" style="margin-top:12px">
+      <dt>Tarif direct</dt><dd class="num">{{ v.daily_rate|eur }} HT / jour</dd>
+      <dt>Coûts fixes</dt><dd class="num">{{ v.monthly_cost|eur }} / mois</dd>
+      <dt>Getaround</dt><dd>{% if v.getaround_car_id %}<span class="badge blue">relié</span>{% else %}<span class="badge gray">non relié</span>{% endif %}
+        {% if not v.active %}<span class="badge red">inactif</span>{% endif %}</dd></dl>
+  </a>{% endfor %}
+</div>
+{% else %}
+<div class="card empty"><b>Commencez par ajouter vos véhicules</b>Ils seront reliés à Getaround automatiquement grâce à leur plaque d'immatriculation.<br><br>
+  <a class="btn primary" href="/vehicules/nouveau">+ Ajouter un véhicule</a></div>
+{% endif %}
+{% endblock %}

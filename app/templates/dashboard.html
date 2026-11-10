@@ -1,0 +1,116 @@
+{% extends "base.html" %}{% from "_macros.html" import badge, source %}
+{% block title %}Pilotage · SharedFleet{% endblock %}
+
+{# Barre à sommet arrondi, ancrée sur la ligne de base #}
+{% macro bar(x, y, w, h, fill, round_top=true) -%}
+{%- set r = [4, h, w / 2]|min if round_top else 0 -%}
+{%- if h > 0.2 %}<path d="M{{ x }},{{ y + h }} V{{ y + r }} Q{{ x }},{{ y }} {{ x + r }},{{ y }} H{{ x + w - r }} Q{{ x + w }},{{ y }} {{ x + w }},{{ y + r }} V{{ y + h }} Z" fill="{{ fill }}"/>{% endif -%}
+{%- endmacro %}
+{% macro barDown(x, y, w, h, fill) -%}
+{%- set r = [4, h, w / 2]|min -%}
+{%- if h > 0.2 %}<path d="M{{ x }},{{ y }} V{{ y + h - r }} Q{{ x }},{{ y + h }} {{ x + r }},{{ y + h }} H{{ x + w - r }} Q{{ x + w }},{{ y + h }} {{ x + w }},{{ y + h - r }} V{{ y }} Z" fill="{{ fill }}"/>{% endif -%}
+{%- endmacro %}
+
+{% block content %}
+<div class="head">
+  <div><h1>Pilotage</h1><div class="sub">Du {{ d.start|date }} au {{ d.end|date }} · montants hors taxes</div></div>
+  <div class="tabs">{% for key, label in periods.items() %}<a class="{{ 'on' if d.period == key }}" href="/?p={{ key }}">{{ label }}</a>{% endfor %}</div>
+</div>
+
+{% if d.todo.messages or d.todo.fines %}
+<div class="note warn">À traiter :
+  {% if d.todo.messages %}<a href="/messages"><b>{{ d.todo.messages }} message(s) Getaround</b></a>{% endif %}
+  {% if d.todo.messages and d.todo.fines %} · {% endif %}
+  {% if d.todo.fines %}<a href="/contraventions"><b>{{ d.todo.fines }} contravention(s)</b></a>{% endif %}
+</div>
+{% endif %}
+
+<div class="grid g4">
+  <div class="card kpi"><div class="label">Chiffre d'affaires</div><div class="value">{{ d.revenue|eur(0) }}</div>
+    <div class="hint">{{ d.bookings_count }} location(s) · {{ "%.0f"|format(d.direct_share) }} % en direct</div></div>
+  <div class="card kpi"><div class="label">Coûts</div><div class="value">{{ d.costs|eur(0) }}</div>
+    <div class="hint">{{ d.fixed_costs|eur(0) }} fixes · {{ d.variable_costs|eur(0) }} variables</div></div>
+  <div class="card kpi"><div class="label">Marge</div><div class="value">{{ d.margin|eur(0) }}</div>
+    <div class="hint">{% if d.revenue %}{{ "%.0f"|format(d.margin_rate) }} % du chiffre d'affaires{% else %}Pas encore de revenu{% endif %}</div></div>
+  <div class="card kpi"><div class="label">Taux d'occupation</div><div class="value">{{ "%.0f"|format(d.occupancy) }} %</div>
+    <div class="hint">{% if d.revenue_per_rented_day %}{{ d.revenue_per_rented_day|eur(0) }} par jour loué{% else %}Temps loué / temps écoulé{% endif %}</div></div>
+</div>
+
+{% set W = 520 %}{% set L = 52 %}{% set band = (W - L - 4) / 12 %}{% set bw = 20 %}
+<div class="grid g2" style="margin-top:16px">
+  <div class="card">
+    <h2>Chiffre d'affaires par mois</h2>
+    <div class="legend"><span><i style="background:var(--series-1)"></i>Getaround</span><span><i style="background:var(--series-2)"></i>Location directe</span></div>
+    {% set H = 180 %}{% set top = rev_ticks[-1] %}
+    <div class="chart">
+      <svg viewBox="0 0 {{ W }} {{ H + 34 }}" role="img" aria-label="Chiffre d'affaires mensuel par canal sur 12 mois">
+        {% for t in rev_ticks %}{% set y = 8 + H - H * t / top %}
+        <line x1="{{ L }}" x2="{{ W }}" y1="{{ y }}" y2="{{ y }}" stroke="var(--grid)" stroke-width="1"/>
+        <text x="{{ L - 8 }}" y="{{ y + 4 }}" text-anchor="end">{{ t|eur(0) }}</text>{% endfor %}
+        {% for m in d.months %}{% set x = L + band * loop.index0 + (band - bw) / 2 %}
+        {% set hg = H * m.getaround / top %}{% set hd = H * m.direct / top %}{% set gap = 2 if hg > 0.2 and hd > 0.2 else 0 %}
+        {{ bar(x, 8 + H - hg, bw, hg, "var(--series-1)", round_top=hd <= 0.2) }}
+        {{ bar(x, 8 + H - hg - hd, bw, [hd - gap, 0]|max, "var(--series-2)") }}
+        <text x="{{ x + bw / 2 }}" y="{{ H + 26 }}" text-anchor="middle">{{ m.short }}</text>
+        <rect class="hit" tabindex="0" x="{{ L + band * loop.index0 }}" y="8" width="{{ band }}" height="{{ H }}"
+              data-tip="{{ m.label }}&#10;#2a78d6|Getaround : {{ m.getaround|eur(0) }}&#10;#eb6834|Direct : {{ m.direct|eur(0) }}&#10;Total : {{ m.revenue|eur(0) }}"/>
+        {% endfor %}
+      </svg>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Marge par mois</h2>
+    <div class="legend"><span>Chiffre d'affaires − coûts fixes et variables</span></div>
+    {% set H = 180 %}{% set lo = margin_ticks[0] %}{% set hi = margin_ticks[-1] %}{% set span = hi - lo %}{% set zero = 8 + H * hi / span %}
+    <div class="chart">
+      <svg viewBox="0 0 {{ W }} {{ H + 34 }}" role="img" aria-label="Marge mensuelle sur 12 mois">
+        {% for t in margin_ticks %}{% set y = 8 + H * (hi - t) / span %}
+        <line x1="{{ L }}" x2="{{ W }}" y1="{{ y }}" y2="{{ y }}" stroke="{{ '#94a3b8' if t == 0 else 'var(--grid)' }}" stroke-width="1"/>
+        <text x="{{ L - 8 }}" y="{{ y + 4 }}" text-anchor="end">{{ t|eur(0) }}</text>{% endfor %}
+        {% for m in d.months %}{% set x = L + band * loop.index0 + (band - bw) / 2 %}{% set h = H * (m.margin|abs) / span %}
+        {% if m.margin >= 0 %}{{ bar(x, zero - h, bw, h, "var(--series-1)") }}{% else %}{{ barDown(x, zero, bw, h, "var(--chart-neg)") }}{% endif %}
+        <text x="{{ x + bw / 2 }}" y="{{ H + 26 }}" text-anchor="middle">{{ m.short }}</text>
+        <rect class="hit" tabindex="0" x="{{ L + band * loop.index0 }}" y="8" width="{{ band }}" height="{{ H }}"
+              data-tip="{{ m.label }}&#10;Marge : {{ m.margin|eur(0) }}{{ ' (perte)' if m.margin < 0 }}&#10;Revenus : {{ m.revenue|eur(0) }}&#10;Coûts : {{ m.costs|eur(0) }}"/>
+        {% endfor %}
+      </svg>
+    </div>
+  </div>
+</div>
+<details class="data card">
+  <summary style="margin:0">Voir les chiffres mensuels en tableau</summary>
+  <div class="scroll" style="margin-top:10px"><table>
+    <thead><tr><th>Mois</th><th class="r">Getaround</th><th class="r">Direct</th><th class="r">Total</th><th class="r">Coûts</th><th class="r">Marge</th></tr></thead>
+    <tbody>{% for m in d.months %}<tr><td>{{ m.label }}</td><td class="r num">{{ m.getaround|eur(0) }}</td><td class="r num">{{ m.direct|eur(0) }}</td>
+      <td class="r num">{{ m.revenue|eur(0) }}</td><td class="r num">{{ m.costs|eur(0) }}</td><td class="r num">{{ m.margin|eur(0) }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+</details>
+
+<div class="grid g21">
+  <div class="card flush">
+    <div style="padding:18px 18px 6px"><h2 style="margin:0">Rentabilité par véhicule</h2></div>
+    <div class="scroll"><table>
+      <thead><tr><th>Véhicule</th><th style="min-width:150px">Occupation</th><th class="r">Locations</th><th class="r">Revenus</th><th class="r">Coûts</th><th class="r">Marge</th></tr></thead>
+      <tbody>{% for x in d.per_vehicle %}
+        <tr class="link" data-href="/vehicules/{{ x.vehicle.id }}"><td><b>{{ x.vehicle.name }}</b><br><small>{{ x.vehicle.plate }}</small></td>
+          <td><div class="meter" title="{{ '%.0f'|format(x.occupancy) }} %"><span style="width:{{ x.occupancy }}%"></span></div><small class="num">{{ "%.0f"|format(x.occupancy) }} %</small></td>
+          <td class="r num">{{ x.count }}</td><td class="r num">{{ x.revenue|eur(0) }}</td><td class="r num">{{ x.costs|eur(0) }}</td>
+          <td class="r num"><b>{{ x.margin|eur(0) }}</b></td></tr>{% endfor %}
+      </tbody>
+    </table></div>
+  </div>
+  <div class="card">
+    <h2>Prochaines locations</h2>
+    {% for b in d.upcoming %}
+    <a href="/locations/{{ b.id }}" style="display:block;color:inherit;padding:8px 0;border-bottom:1px solid var(--line)">
+      <b>{{ b.vehicle.name }}</b> {{ source(b) }} {{ badge(b.status) }}<br>
+      <small>{{ b.starts_at|dt }} → {{ b.ends_at|dt }}{% if b.customer %} · {{ b.customer.label }}{% endif %}</small>
+    </a>
+    {% else %}<div class="empty"><b>Aucune location à venir</b>Les véhicules sont tous disponibles.</div>{% endfor %}
+    {% if d.costs_by_category %}
+    <h2 style="margin-top:18px">Répartition des coûts</h2>
+    <dl class="kv">{% for cat, amount in d.costs_by_category|dictsort(by="value", reverse=true) %}<dt>{{ cat }}</dt><dd class="num" style="text-align:right">{{ amount|eur(0) }}</dd>{% endfor %}</dl>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

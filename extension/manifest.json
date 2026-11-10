@@ -1,0 +1,9 @@
+{
+  "manifest_version": 3,
+  "name": "SharedFleet — désignation du conducteur",
+  "version": "1.0.0",
+  "description": "Pré-remplit les formulaires de désignation (ANTAI) et de paiement des FPS à partir de vos locations SharedFleet. Le captcha et la validation restent manuels.",
+  "action": { "default_popup": "popup.html", "default_title": "SharedFleet" },
+  "permissions": ["activeTab", "scripting", "storage"],
+  "icons": { "48": "icon48.png", "128": "icon128.png" }
+}

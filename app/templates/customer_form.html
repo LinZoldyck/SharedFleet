@@ -1,0 +1,34 @@
+{% extends "base.html" %}{% from "_macros.html" import field, badge %}
+{% block title %}{{ c.label if c.id else "Nouveau client" }} · SharedFleet{% endblock %}
+{% block content %}
+<div class="head"><h1>{{ c.label if c.id else "Nouveau client" }}</h1></div>
+<form class="card" method="post" action="/clients/{{ c.id or 0 }}" style="max-width:760px">
+  <input type="hidden" name="back" value="{{ request.query_params.get('back', '') }}">
+  <h2>Société</h2>
+  <div class="grid g3">
+    {{ field("company_name", "Raison sociale", c.company_name, placeholder="Laisser vide pour un particulier") }}
+    {{ field("siret", "SIRET", c.siret) }}
+    {{ field("vat_number", "N° TVA", c.vat_number) }}
+  </div>
+  <h2>Conducteur / représentant</h2>
+  <div class="grid g2">
+    {{ field("first_name", "Prénom", c.first_name) }}{{ field("last_name", "Nom", c.last_name) }}
+    {{ field("phone", "Téléphone portable", c.phone, type="tel", help="Reçoit le code d'accès par SMS.") }}
+    {{ field("email", "E-mail", c.email, type="email") }}
+  </div>
+  {{ field("address", "Adresse", c.address) }}
+  <div class="grid g3">{{ field("postal_code", "Code postal", c.postal_code) }}{{ field("city", "Ville", c.city) }}{{ field("country", "Pays", c.country) }}</div>
+  <h2>Permis de conduire <small class="muted" style="font-weight:400">— utile pour désigner le conducteur en cas de contravention</small></h2>
+  <div class="grid g2">
+    {{ field("birth_date", "Date de naissance", c.birth_date, type="date") }}
+    {{ field("license_number", "Numéro de permis", c.license_number) }}
+    {{ field("license_date", "Date d'obtention", c.license_date, type="date") }}
+    {{ field("license_country", "Pays de délivrance", c.license_country) }}
+  </div>
+  {% if user.role != "viewer" %}<div class="actions"><button class="btn primary">Enregistrer</button><a class="btn" href="/clients">Annuler</a></div>{% endif %}
+</form>
+{% if bookings %}
+<div class="card flush" style="max-width:760px"><table><thead><tr><th>Location</th><th>Véhicule</th><th>Départ</th><th>Statut</th></tr></thead>
+<tbody>{% for b in bookings %}<tr class="link" data-href="/locations/{{ b.id }}"><td><a href="/locations/{{ b.id }}">{{ b.reference }}</a></td><td>{{ b.vehicle.name }}</td><td>{{ b.starts_at|dt }}</td><td>{{ badge(b.status) }}</td></tr>{% endfor %}</tbody></table></div>
+{% endif %}
+{% endblock %}

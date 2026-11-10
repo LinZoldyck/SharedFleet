@@ -1,0 +1,51 @@
+{% extends "base.html" %}{% from "_macros.html" import badge, source %}
+{% block title %}Locations · SharedFleet{% endblock %}
+{% block content %}
+<div class="head">
+  <div><h1>Locations</h1><div class="sub">Getaround et locations directes, au même endroit</div></div>
+  <div class="actions">
+    <form method="post" action="/getaround/synchroniser"><button class="btn">Synchroniser Getaround</button></form>
+    <a class="btn primary" href="/locations/nouvelle">+ Nouvelle location directe</a>
+  </div>
+</div>
+
+<div class="card flush">
+  <div style="padding:16px 18px 10px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+    <h2 style="margin:0">Disponibilité sur 14 jours</h2>
+    <div class="legend" style="margin:0"><span><i style="background:var(--series-1)"></i>Getaround</span><span><i style="background:var(--series-2)"></i>Direct</span></div>
+  </div>
+  <div class="scroll"><div class="plan">
+    <div class="row"><div></div><div class="days">{% for day in planning.days %}<div class="{{ 'we' if day.weekday() >= 5 }}">{% if loop.first %}<b>Auj.</b>{% else %}{{ day.strftime("%d/%m") }}{% endif %}</div>{% endfor %}</div></div>
+    {% for row in planning.rows %}
+    <div class="row">
+      <div class="name">{{ row.vehicle.name }}<small class="muted">{{ row.vehicle.plate }}</small></div>
+      <div class="track">
+        {% for x in row.bars %}<a class="bar {{ x.b.source }}" href="/locations/{{ x.b.id }}" style="left:{{ x.left }}%;width:{{ x.width }}%"
+          data-tip="{{ x.b.reference }}&#10;{{ x.b.starts_at|dt }} → {{ x.b.ends_at|dt }}{% if x.b.customer %}&#10;{{ x.b.customer.label }}{% endif %}">{{ x.b.customer.label if x.b.customer else x.b.reference }}</a>{% endfor %}
+        <div class="nowline" style="left:{{ planning.now }}%"></div>
+      </div>
+    </div>
+    {% else %}<div class="empty"><b>Aucun véhicule actif</b><a href="/vehicules/nouveau">Ajouter un véhicule</a></div>{% endfor %}
+  </div></div>
+</div>
+
+<div class="head" style="margin:22px 0 12px">
+  <div class="tabs">{% for key, label in [("actives", "À venir et en cours"), ("direct", "Directes"), ("getaround", "Getaround"), ("toutes", "Toutes")] %}<a class="{{ 'on' if f == key }}" href="/locations?f={{ key }}">{{ label }}</a>{% endfor %}</div>
+</div>
+<div class="card flush"><div class="scroll">
+  {% if bookings %}
+  <table>
+    <thead><tr><th>Référence</th><th>Véhicule</th><th>Client</th><th>Départ</th><th>Retour</th><th class="r">Montant HT</th><th>Statut</th></tr></thead>
+    <tbody>{% for b in bookings %}
+      <tr class="link" data-href="/locations/{{ b.id }}">
+        <td><a href="/locations/{{ b.id }}"><b>{{ b.reference }}</b></a><br>{{ source(b) }}</td>
+        <td>{{ b.vehicle.name }}<br><small>{{ b.vehicle.plate }}</small></td>
+        <td>{{ b.customer.label if b.customer else "—" }}</td>
+        <td>{{ b.starts_at|dt }}</td><td>{{ b.ends_at|dt }}</td>
+        <td class="r num">{{ b.price_ht|eur }}</td><td>{{ badge(b.status) }}</td>
+      </tr>{% endfor %}
+    </tbody>
+  </table>
+  {% else %}<div class="empty"><b>Aucune location ici</b>Créez une location directe ou synchronisez Getaround.</div>{% endif %}
+</div></div>
+{% endblock %}

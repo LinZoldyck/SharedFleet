@@ -1,0 +1,115 @@
+{% extends "base.html" %}{% from "_macros.html" import field, secret_field %}
+{% block title %}Réglages · SharedFleet{% endblock %}
+{% block content %}
+<div class="head"><div><h1>Réglages</h1><div class="sub">{{ org.name }}</div></div></div>
+
+<div class="card" id="societe">
+  <h2>Société — en-tête des contrats et factures</h2>
+  <form method="post" action="/reglages-logo" enctype="multipart/form-data" class="inline" style="margin-bottom:16px;align-items:center">
+    {% if s.logo_path %}<img src="/media/{{ s.logo_path }}" alt="Logo" style="max-height:56px;max-width:160px;flex:none">{% endif %}
+    <div><label for="logo">Logo (PNG ou JPG)</label><input type="file" id="logo" name="logo" accept="image/png,image/jpeg" required></div>
+    <button class="btn">Envoyer le logo</button>
+  </form>
+  <form method="post" action="/reglages/societe">
+    <div class="grid g2">
+      {{ field("company_name", "Raison sociale", s.company_name, required=true) }}{{ field("company_siret", "SIRET", s.company_siret) }}
+      {{ field("company_address", "Adresse", s.company_address) }}{{ field("company_vat", "N° TVA intracommunautaire", s.company_vat) }}
+      {{ field("company_postal_code", "Code postal", s.company_postal_code) }}{{ field("company_city", "Ville", s.company_city) }}
+      {{ field("company_phone", "Téléphone", s.company_phone) }}{{ field("company_email", "E-mail", s.company_email, type="email") }}
+    </div>
+    <div class="field"><label for="contract_terms">Conditions générales du contrat de location</label>
+      <textarea id="contract_terms" name="contract_terms" style="min-height:220px">{{ s.contract_terms }}</textarea>
+      <div class="help">Un article par ligne. Remplacez ce texte type par les clauses de votre propre contrat.</div></div>
+    <button class="btn primary">Enregistrer</button>
+  </form>
+</div>
+
+<div class="card" id="getaround">
+  <h2>Getaround</h2>
+  <form method="post" action="/reglages/getaround">
+    {{ secret_field("getaround_token", "Jeton d'API propriétaire", secret.getaround_token, "Fourni par votre gestionnaire de compte Getaround (owner-api@getaround.com).") }}
+    {{ secret_field("getaround_webhook_secret", "Secret de signature des webhooks", secret.getaround_webhook_secret, "Sert à vérifier que les événements viennent bien de Getaround.") }}
+    <div class="field"><label>URL de webhook à communiquer à Getaround</label><span class="mono">{{ webhook_url }}</span>
+      <div class="help">Doit être joignable en HTTPS depuis Internet. Sans webhook, l'application relève Getaround toutes les 5 minutes.</div></div>
+    <label class="check field"><input type="checkbox" name="getaround_block_calendar" {{ 'checked' if s.getaround_block_calendar }}> Bloquer le calendrier Getaround quand je crée une location directe (évite la double réservation)</label>
+    <label class="check field"><input type="checkbox" name="getaround_include_insurance" {{ 'checked' if s.getaround_include_insurance }}> Inclure le montant d'assurance dans le revenu des locations Getaround</label>
+    <button class="btn primary">Enregistrer</button>
+  </form>
+</div>
+
+<div class="card" id="assistant">
+  <h2>Assistant de messagerie (Claude)</h2>
+  <form method="post" action="/reglages/assistant">
+    {{ secret_field("anthropic_api_key", "Clé d'API Claude (Anthropic)", secret.anthropic_api_key, "Sert aussi à lire les contraventions scannées ou photographiées.") }}
+    <div class="field"><label for="assistant_mode">Comportement</label>
+      <select id="assistant_mode" name="assistant_mode">
+        <option value="draft" {{ 'selected' if s.assistant_mode == 'draft' }}>Brouillon — l'assistant prépare la réponse, je valide avant envoi</option>
+        <option value="auto" {{ 'selected' if s.assistant_mode == 'auto' }}>Automatique — il répond seul aux questions simples</option>
+        <option value="off" {{ 'selected' if s.assistant_mode == 'off' }}>Désactivé</option></select>
+      <div class="help">Dans tous les cas, ce qui touche à l'argent, aux dates, aux dommages, aux amendes ou à un litige vous est transmis sans réponse.</div></div>
+    <div class="field"><label for="assistant_instructions">Informations que l'assistant peut donner</label>
+      <textarea id="assistant_instructions" name="assistant_instructions" style="min-height:140px" placeholder="Ex. : Le véhicule se gare sur la place n° 12 du parking. Hauteur 2,50 m, permis B suffisant. Sangles et diable fournis. Plein à refaire au retour (gazole).">{{ s.assistant_instructions }}</textarea>
+      <div class="help">L'assistant ne répond qu'à partir de ce texte et des données de la location. Ce qu'il ne sait pas, il vous le transmet.</div></div>
+    <button class="btn primary">Enregistrer</button>
+  </form>
+</div>
+
+<div class="card" id="sms">
+  <h2>SMS — code d'accès envoyé 30 minutes avant le départ</h2>
+  <form method="post" action="/reglages/sms">
+    <div class="field"><label for="sms_provider">Fournisseur</label>
+      <select id="sms_provider" name="sms_provider">
+        <option value="console" {{ 'selected' if s.sms_provider == 'console' }}>Aucun (test) — le SMS est seulement écrit dans le journal</option>
+        <option value="twilio" {{ 'selected' if s.sms_provider == 'twilio' }}>Twilio</option>
+        <option value="http" {{ 'selected' if s.sms_provider == 'http' }}>Passerelle HTTP (autre fournisseur)</option></select></div>
+    <div class="grid g3">{{ field("twilio_sid", "Twilio — Account SID", s.twilio_sid) }}{{ secret_field("twilio_token", "Twilio — Auth Token", secret.twilio_token) }}{{ field("twilio_from", "Twilio — numéro ou nom d'expéditeur", s.twilio_from) }}</div>
+    <div class="grid g2">{{ field("sms_http_url", "Passerelle — URL (POST JSON {to, message})", s.sms_http_url) }}{{ secret_field("sms_http_token", "Passerelle — jeton Bearer", secret.sms_http_token) }}</div>
+    <button class="btn primary">Enregistrer</button>
+  </form>
+  <form method="post" action="/reglages-sms-test" class="inline" style="margin-top:14px;max-width:420px">
+    <div><label for="to">Tester l'envoi vers</label><input type="tel" id="to" name="to" placeholder="06 12 34 56 78" required></div><button class="btn">Envoyer un SMS de test</button></form>
+</div>
+
+<div class="card" id="facturation">
+  <h2>Facturation</h2>
+  <form method="post" action="/reglages/facturation">
+    <div class="field"><label for="invoice_provider">Outil de facturation</label>
+      <select id="invoice_provider" name="invoice_provider">
+        <option value="local" {{ 'selected' if s.invoice_provider == 'local' }}>Factures PDF générées par l'application</option>
+        <option value="pennylane" {{ 'selected' if s.invoice_provider == 'pennylane' }}>Pennylane</option></select></div>
+    {{ secret_field("pennylane_token", "Pennylane — jeton d'API", secret.pennylane_token, "Pennylane → Paramètres → Connectivité → Développeurs. Droits nécessaires : clients et factures clients.") }}
+    <label class="check field"><input type="checkbox" name="invoice_draft" {{ 'checked' if s.invoice_draft }}> Créer les factures Pennylane en brouillon (je les finalise dans Pennylane)</label>
+    <div class="grid g2">{{ field("invoice_prefix", "Préfixe des factures locales", s.invoice_prefix) }}{{ field("fine_admin_fee", "Frais de gestion d'une contravention, HT (€)", s.fine_admin_fee, attrs='inputmode="decimal"') }}</div>
+    <button class="btn primary">Enregistrer</button>
+  </form>
+</div>
+
+<div class="card" id="extension">
+  <h2>Extension Chrome — désignation du conducteur</h2>
+  <p>L'extension (dossier <span class="mono">extension/</span> du projet) remplit les formulaires de l'ANTAI à partir des contraventions rapprochées. Elle se connecte avec l'adresse de cette application et un jeton personnel.</p>
+  <p>Dossier de dépôt des avis : <span class="mono">{{ fines_inbox }}</span></p>
+  {% if new_token %}<div class="note"><b>Votre jeton (affiché une seule fois) :</b><br><span class="mono">{{ new_token }}</span> <button class="btn small" type="button" data-copy="{{ new_token }}">Copier</button></div>{% endif %}
+  <form method="post" action="/reglages-jeton" {% if user.api_token_hash %}data-confirm="L'ancien jeton cessera de fonctionner. Continuer ?"{% endif %}>
+    <button class="btn">{{ "Régénérer mon jeton" if user.api_token_hash else "Générer mon jeton" }}</button></form>
+</div>
+
+<div class="card flush" id="utilisateurs">
+  <div style="padding:18px 18px 8px"><h2 style="margin:0">Utilisateurs et rôles</h2>
+    <small class="muted">Administrateur : tout, y compris ces réglages · Gestionnaire : locations, messages, contraventions, factures · Lecture seule : consultation.</small></div>
+  <div class="scroll"><table><thead><tr><th>Nom</th><th>E-mail</th><th>Rôle</th><th>Actif</th><th>Nouveau mot de passe</th><th></th></tr></thead><tbody>
+  {% for u in users %}<tr>
+    <td><b>{{ u.name }}</b></td><td>{{ u.email }}</td>
+    <td><select name="role" form="uf{{ u.id }}" aria-label="Rôle">{% for key, label in ROLES.items() %}<option value="{{ key }}" {{ 'selected' if u.role == key }}>{{ label }}</option>{% endfor %}</select></td>
+    <td><input type="checkbox" name="active" form="uf{{ u.id }}" aria-label="Actif" {{ 'checked' if u.active }}></td>
+    <td><input type="password" name="password" form="uf{{ u.id }}" autocomplete="new-password" placeholder="Inchangé" aria-label="Nouveau mot de passe"></td>
+    <td class="r"><form method="post" action="/utilisateurs/{{ u.id }}" id="uf{{ u.id }}"><button class="btn small">Enregistrer</button></form></td></tr>{% endfor %}
+  </tbody></table></div>
+  <form method="post" action="/utilisateurs" class="inline" style="padding:16px 18px;border-top:1px solid var(--line)">
+    <div><label for="nu_name">Nom</label><input type="text" id="nu_name" name="name" required></div>
+    <div><label for="nu_email">E-mail</label><input type="email" id="nu_email" name="email" required></div>
+    <div><label for="nu_role">Rôle</label><select id="nu_role" name="role">{% for key, label in ROLES.items() %}<option value="{{ key }}" {{ 'selected' if key == 'manager' }}>{{ label }}</option>{% endfor %}</select></div>
+    <div><label for="nu_pw">Mot de passe provisoire</label><input type="password" id="nu_pw" name="password" minlength="10" autocomplete="new-password" required></div>
+    <button class="btn primary">Inviter</button>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="fr">
+<head><meta charset="utf-8"><link rel="stylesheet" href="popup.css"></head>
+<body>
+  <header><b>SharedFleet</b><button id="openSettings" class="link" type="button">Connexion</button></header>
+
+  <section id="settings" hidden>
+    <label for="server">Adresse de l'application</label>
+    <input id="server" type="url" placeholder="http://raspberrypi.local:8000">
+    <label for="token">Jeton personnel <small>(Réglages → Extension Chrome)</small></label>
+    <input id="token" type="password" placeholder="sf_…">
+    <button id="save" class="primary" type="button">Enregistrer</button>
+  </section>
+
+  <p id="status" role="status"></p>
+  <section id="list"></section>
+
+  <section id="detail" hidden>
+    <button id="back" class="link" type="button">← Toutes les contraventions</button>
+    <h2 id="title"></h2>
+    <button id="fill" class="primary" type="button">Remplir cette page</button>
+    <p class="hint">Remplit les champs reconnus de l'étape affichée. Répétez à chaque étape. Vous vérifiez, résolvez le captcha et validez vous-même.</p>
+    <div id="fields"></div>
+    <button id="done" type="button">Marquer comme traitée</button>
+  </section>
+  <script src="fill.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,75 @@
+{% extends "base.html" %}{% from "_macros.html" import badge, field, source %}
+{% block title %}Contravention · SharedFleet{% endblock %}
+{% block content %}
+{% set b = fine.booking %}
+<div class="head">
+  <div><h1>{{ "Forfait post-stationnement" if fine.kind == "fps" else "Avis de contravention" }} {{ badge(fine.status) }}</h1>
+    <div class="sub">N° {{ fine.notice_number or "illisible" }} · lu par {{ "Claude" if fine.extraction == "claude" else "lecture simple" if fine.extraction else "saisie manuelle" }}</div></div>
+  <div class="actions"><a class="btn" href="/contraventions/{{ fine.id }}/fichier" target="_blank">Voir l'avis original</a></div>
+</div>
+
+{% if fine.status == "to_review" %}<div class="note warn">Lecture incomplète ou plusieurs locations possibles : vérifiez les champs ci-dessous, ou choisissez la location à la main.</div>
+{% elif fine.status == "unmatched" %}<div class="note warn">Aucune location ne couvre cette date pour ce véhicule : l'infraction vous revient probablement (trajet personnel, convoyage…).</div>{% endif %}
+
+<div class="grid g2">
+  <div class="card">
+    <h2>{% if b %}Location concernée {{ source(b) }}{% else %}Location concernée{% endif %}</h2>
+    {% if b %}
+    <dl class="kv"><dt>Location</dt><dd><a href="/locations/{{ b.id }}">{{ b.reference }}</a> · {{ b.vehicle.label }}</dd>
+      <dt>Période</dt><dd>{{ b.starts_at|dt }} → {{ b.ends_at|dt }}</dd></dl>
+    {% if d.driver %}
+    <h2 style="margin-top:16px">{{ "Client à refacturer" if fine.kind == "fps" else "Société à désigner" if d.driver.is_company else "Conducteur à désigner" }}</h2>
+    <dl class="kv">
+      {% if d.driver.is_company %}<dt>Raison sociale</dt><dd>{{ d.driver.company_name }}</dd><dt>SIRET</dt><dd>{{ d.driver.siret or "—" }}</dd><dt>Représentant</dt><dd>{{ d.driver.first_name }} {{ d.driver.last_name }}</dd>
+      {% else %}<dt>Nom</dt><dd>{{ d.driver.last_name }}</dd><dt>Prénom</dt><dd>{{ d.driver.first_name }}</dd><dt>Né(e) le</dt><dd>{{ d.driver.birth_date or "—" }}</dd>{% endif %}
+      <dt>Adresse</dt><dd>{{ d.driver.address }}, {{ d.driver.postal_code }} {{ d.driver.city }}</dd>
+      <dt>Permis</dt><dd>{{ d.driver.license_number or "—" }}{% if d.driver.license_date %} du {{ d.driver.license_date }}{% endif %}</dd>
+      <dt>Contact</dt><dd>{{ d.driver.email }} {{ d.driver.phone }}</dd></dl>
+    {% endif %}
+    {% else %}<p class="muted">Aucune location rapprochée.</p>{% endif %}
+  </div>
+
+  <div class="card">
+    <h2>Que faire ?</h2>
+    {% if fine.kind == "fps" %}
+    <p>Un FPS ne se « désigne » pas : il est dû par le titulaire de la carte grise. Vous le payez, puis vous le refacturez au locataire.</p>
+    <ol style="padding-left:18px;margin:0 0 12px">
+      <li>Payez le FPS — l'extension Chrome pré-remplit le numéro d'avis et la plaque sur le site de paiement.</li>
+      <li>{% if b and b.source == "getaround" %}Déclarez-le à Getaround depuis la location pour être remboursé.{% else %}Refacturez-le au client ({{ fine.amount|eur }} + {{ fee|eur }} HT de frais de gestion).{% endif %}</li>
+    </ol>
+    {% if b and b.source == "direct" and fine.status != "done" and user.role != "viewer" %}
+    <form method="post" action="/contraventions/{{ fine.id }}/refacturer" style="margin-bottom:10px"><button class="btn primary">Refacturer au client</button></form>{% endif %}
+    {% else %}
+    <p>Désignez le conducteur sur le site de l'ANTAI dans les 45 jours.</p>
+    <ol style="padding-left:18px;margin:0 0 12px">
+      <li>Ouvrez <span class="mono">antai.gouv.fr</span> et commencez la désignation avec le n° d'avis.</li>
+      <li>Cliquez sur l'extension SharedFleet : elle remplit les champs de chaque étape.</li>
+      <li>Vous gardez la main sur le captcha et la validation finale.</li>
+    </ol>
+    {% endif %}
+    {% if user.role != "viewer" %}
+    <form method="post" action="/contraventions/{{ fine.id }}/statut">
+      <input type="hidden" name="done" value="{{ '0' if fine.status == 'done' else '1' }}">
+      <button class="btn">{{ "Rouvrir" if fine.status == "done" else "Marquer comme traitée" }}</button>
+      {% if fine.done_at %}<small class="muted"> traitée le {{ fine.done_at|dt }}</small>{% endif %}
+    </form>{% endif %}
+  </div>
+</div>
+
+<form class="card" method="post" action="/contraventions/{{ fine.id }}">
+  <h2>Informations lues sur l'avis</h2>
+  <div class="grid g3">
+    <div class="field"><label for="kind">Type</label><select id="kind" name="kind"><option value="amende" {{ 'selected' if fine.kind == 'amende' }}>Amende (désignation possible)</option><option value="fps" {{ 'selected' if fine.kind == 'fps' }}>FPS — forfait post-stationnement</option></select></div>
+    {{ field("notice_number", "Numéro d'avis", fine.notice_number) }}
+    {{ field("plate", "Immatriculation", fine.plate) }}
+    {{ field("offense_at", "Date et heure de l'infraction", fine.offense_at.strftime("%Y-%m-%dT%H:%M") if fine.offense_at else "", type="datetime-local") }}
+    {{ field("offense_type", "Nature", fine.offense_type) }}
+    {{ field("amount", "Montant (€)", fine.amount, attrs='inputmode="decimal"') }}
+  </div>
+  {{ field("location", "Lieu", fine.location) }}
+  <div class="field"><label for="booking_id">Location</label>
+    <select id="booking_id" name="booking_id"><option value="">Rechercher automatiquement d'après la plaque et la date</option>
+      {% for c in candidates %}<option value="{{ c.id }}" {{ 'selected' if c.id == fine.booking_id }}>{{ c.reference }} — {{ c.starts_at|dt }} → {{ c.ends_at|dt }}{% if c.customer %} — {{ c.customer.label }}{% endif %}</option>{% endfor %}</select></div>
+  {% if user.role != "viewer" %}<button class="btn primary">Enregistrer et rapprocher</button>{% endif %}
+</form>
+{% endblock %}

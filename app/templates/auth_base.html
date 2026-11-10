@@ -1,0 +1,15 @@
+{% from "_macros.html" import icon %}<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}SharedFleet{% endblock %}</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<div class="center"><div class="auth">
+  <div class="brand">{{ icon("logo") }}<span>SharedFleet</span></div>
+  {% for kind, text in flashes %}<div class="flash {{ kind }}" role="status">{{ text }}</div>{% endfor %}
+  {% block content %}{% endblock %}
+</div></div>
+</body>
+</html>

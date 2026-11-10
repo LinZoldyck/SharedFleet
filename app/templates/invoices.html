@@ -1,0 +1,14 @@
+{% extends "base.html" %}{% from "_macros.html" import badge %}
+{% block title %}Factures · SharedFleet{% endblock %}
+{% block content %}
+<div class="head"><div><h1>Factures</h1><div class="sub">Créées depuis une location ou une contravention à refacturer</div></div></div>
+<div class="card flush"><div class="scroll">
+{% if invoices %}
+<table><thead><tr><th>Numéro</th><th>Date</th><th>Client</th><th>Objet</th><th class="r">HT</th><th class="r">TTC</th><th>Outil</th><th>Statut</th></tr></thead>
+<tbody>{% for i in invoices %}<tr>
+  <td>{% if i.provider == "local" or i.url %}<a href="/factures/{{ i.id }}/pdf" target="_blank"><b>{{ i.number or "Brouillon" }}</b></a>{% else %}<b>{{ i.number or "Brouillon" }}</b>{% endif %}</td>
+  <td>{{ i.issued_on|date }}</td><td>{{ i.customer.label }}</td><td>{{ i.label }}</td>
+  <td class="r num">{{ i.amount_ht|eur }}</td><td class="r num">{{ i.amount_ttc|eur }}</td><td>{{ provider[i.provider] }}</td><td>{{ badge(i.status) }}</td></tr>{% endfor %}</tbody></table>
+{% else %}<div class="empty"><b>Aucune facture</b>Ouvrez une location directe terminée et cliquez sur « Créer la facture ».</div>{% endif %}
+</div></div>
+{% endblock %}

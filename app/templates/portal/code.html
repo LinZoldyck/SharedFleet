@@ -1,0 +1,11 @@
+{% extends "portal/base.html" %}
+{% block content %}
+<form class="card" method="post" action="/acces" style="margin-top:12vh">
+  <h1>Bonjour 👋</h1>
+  <p class="muted" style="margin:6px 0 18px">Saisissez le code à 6 chiffres reçu par SMS pour accéder à votre location.</p>
+  <label for="code">Code d'accès</label>
+  <input class="codeinput" type="text" id="code" name="code" inputmode="numeric" pattern="[0-9 ]*" maxlength="7" autocomplete="one-time-code" required autofocus>
+  <button class="btn primary big" style="margin-top:14px">Accéder à ma location</button>
+</form>
+<p class="muted" style="text-align:center;font-size:.86rem">Le code est envoyé 30 minutes avant le début de la location.</p>
+{% endblock %}
