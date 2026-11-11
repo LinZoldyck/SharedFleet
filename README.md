@@ -71,8 +71,8 @@ copie datée et cohérente ; planifiez-le avec cron.
 2. **Réglages → Société** — identité, **logo**, conditions générales de votre contrat.
 3. **Réglages → Envoi du code d'accès** — choisissez SMS, e-mail ou les deux.
    - **SMS** : Twilio ou une passerelle HTTP. En mode « test », le SMS est seulement écrit dans le journal.
-   - **E-mail** : n'importe quel serveur SMTP (Gmail, Outlook, OVH, Brevo…). Avec Gmail ou Outlook, créez un
-     « mot de passe d'application ». Le bouton « Envoyer un e-mail de test » vérifie la configuration.
+   - **E-mail** : un serveur SMTP avec identifiant et mot de passe (Brevo, OVH, Gmail…). Avec Gmail, créez un
+     « mot de passe d'application ». Outlook.com / Hotmail n'est pas compatible : Microsoft y exige OAuth. Le bouton « Envoyer un e-mail de test » vérifie la configuration.
      L'e-mail contient le code et le lien, jamais le code de la boîte à clés.
 4. **Réglages → Getaround** — jeton d'API propriétaire (à demander à `owner-api@getaround.com`), puis
    communiquez à Getaround l'URL de webhook affichée. Sans webhook, la relève se fait toutes les 5 minutes.

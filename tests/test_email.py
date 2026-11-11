@@ -122,7 +122,7 @@ def test_failure_is_reported_and_retried_later(client, fleet, db, smtp, monkeypa
     assert b.code_sent_at is None  # rien n'est parti
     history = svc.code_history(db, b)
     assert {h["channel"] for h in history} == {"sms", "email"} and not any(h["ok"] for h in history)
-    assert "mot de passe d'application" in next(h for h in history if h["channel"] == "email")["error"]
+    assert "mot de passe" in next(h for h in history if h["channel"] == "email")["error"]
     assert scheduler.send_due_codes() == 0  # pas de nouvelle tentative avant 10 minutes
     page = client.get(f"/locations/{b.id}").text
     assert "E-mail : échec" in page or "e-mail : échec" in page
@@ -170,3 +170,12 @@ def test_header_injection_is_impossible(client, fleet, db, smtp, sms):
     assert not email.looks_valid(customer.email)
     assert svc.send_access_code(db, db.query(Organization).one(), make_booking(client, db, vehicle, customer)) == {"sms": "ok"}
     assert smtp.sent == []
+
+
+def test_microsoft_basic_auth_refusal_is_explained(client, fleet, db, smtp, sms, monkeypatch):
+    def refuse(self, user, password):
+        raise smtplib.SMTPAuthenticationError(535, b"5.7.139 Authentication unsuccessful, basic authentication is disabled.")
+    monkeypatch.setattr(FakeSMTP, "login", refuse)
+    vehicle, customer = fleet
+    result = svc.send_access_code(db, db.query(Organization).one(), make_booking(client, db, vehicle, customer), channels=("email",))
+    assert "Microsoft refuse la connexion par mot de passe" in result["email"]

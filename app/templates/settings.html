@@ -72,14 +72,14 @@
       <select id="email_provider" name="email_provider">
         <option value="off" {{ 'selected' if s.email_provider == 'off' }}>Désactivé</option>
         <option value="console" {{ 'selected' if s.email_provider == 'console' }}>Test — l'e-mail est seulement écrit dans le journal</option>
-        <option value="smtp" {{ 'selected' if s.email_provider == 'smtp' }}>Serveur SMTP (Gmail, Outlook, OVH, Brevo…)</option></select></div>
+        <option value="smtp" {{ 'selected' if s.email_provider == 'smtp' }}>Serveur SMTP (Brevo, OVH, Gmail…)</option></select></div>
     <div class="grid g3">
       {{ field("smtp_host", "Serveur SMTP", s.smtp_host, placeholder="smtp.gmail.com") }}
       {{ field("smtp_port", "Port", s.smtp_port, placeholder="587", attrs='inputmode="numeric"') }}
       <div class="field"><label for="smtp_security">Chiffrement</label><select id="smtp_security" name="smtp_security">
         {% for key, label in smtp_security.items() %}<option value="{{ key }}" {{ 'selected' if s.smtp_security == key }}>{{ label }}</option>{% endfor %}</select></div>
       {{ field("smtp_user", "Identifiant", s.smtp_user, attrs='autocomplete="off"') }}
-      {{ secret_field("smtp_password", "Mot de passe", secret.smtp_password, "Gmail / Outlook : créez un « mot de passe d'application ».") }}
+      {{ secret_field("smtp_password", "Mot de passe", secret.smtp_password, "Gmail : « mot de passe d'application ». Outlook.com / Hotmail : non compatible (Microsoft exige OAuth).") }}
     </div>
     <div class="grid g2">
       {{ field("email_from", "Adresse d'expédition", s.email_from, type="email", placeholder="location@votre-domaine.fr") }}

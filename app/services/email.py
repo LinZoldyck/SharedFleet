@@ -78,7 +78,11 @@ def send(org: Organization, msg: EmailMessage) -> None:
                 server.login(user, password)
             server.send_message(msg)
     except smtplib.SMTPAuthenticationError as exc:
-        raise EmailError("Identifiant ou mot de passe SMTP refusé. Avec Gmail ou Outlook, utilisez un « mot de passe d'application ».") from exc
+        detail = exc.smtp_error.decode(errors="replace") if isinstance(exc.smtp_error, bytes) else str(exc.smtp_error)
+        if "basic auth" in detail.lower() or "5.7.139" in detail or "5.7.30" in detail:
+            raise EmailError("Microsoft refuse la connexion par mot de passe (Outlook.com / Hotmail, ou Microsoft 365 "
+                             "avec SMTP AUTH désactivé). Utilisez un autre service d'envoi.") from exc
+        raise EmailError("Identifiant ou mot de passe SMTP refusé. Avec Gmail, utilisez un « mot de passe d'application ».") from exc
     except smtplib.SMTPRecipientsRefused as exc:
         raise EmailError(f"Adresse refusée par le serveur : {msg['To']}") from exc
     except (smtplib.SMTPException, OSError) as exc:
