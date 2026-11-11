@@ -2,13 +2,14 @@
 import secrets
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from .. import config
 from ..db import get_db
 from ..models import ROLES, User
 from ..security import admin, hash_password, token_hash
-from ..services import email, fines, media, settings, sms
+from ..services import email, fines, media, microsoft, settings, sms
 from ..web import flash, owned, redirect, render, to_float
 
 router = APIRouter()
@@ -19,7 +20,7 @@ SECTIONS = {
                 "company_vat", "company_phone", "company_email", "contract_terms"),
     "getaround": ("getaround_token", "getaround_webhook_secret"),
     "assistant": ("anthropic_api_key", "assistant_mode", "assistant_instructions"),
-    "email": ("email_provider", "smtp_host", "smtp_port", "smtp_security", "smtp_user", "smtp_password", "email_from",
+    "email": ("email_provider", "ms_client_id", "ms_tenant", "smtp_host", "smtp_port", "smtp_security", "smtp_user", "smtp_password", "email_from",
               "email_from_name"),
     "sms": ("sms_provider", "twilio_sid", "twilio_token", "twilio_from", "sms_http_url", "sms_http_token"),
     "facturation": ("invoice_provider", "pennylane_token", "invoice_prefix"),
@@ -34,7 +35,7 @@ def settings_page(request: Request, user: User = Depends(admin), db: Session = D
     values = {k: settings.get(org, k) for k in settings.DEFAULTS}
     secrets_set = {k: settings.has(org, k) for k in settings.SECRET_KEYS}
     users = db.query(User).filter_by(org_id=org.id).order_by(User.id).all()
-    return render(request, "settings.html", s=values, smtp_security=email.SECURITY, secret=secrets_set, users=users, org=org,
+    return render(request, "settings.html", s=values, smtp_security=email.SECURITY, ms_connected=microsoft.connected(org), secret=secrets_set, users=users, org=org,
                   webhook_url=f"{config.BASE_URL}/webhooks/getaround/{org.webhook_key}",
                   fines_inbox=fines.inbox(org.id), new_token=request.session.pop("new_token", None))
 
@@ -91,6 +92,41 @@ def email_test(request: Request, to: str = Form(), user: User = Depends(admin)):
               if settings.get(user.org, "email_provider") == "console" else f"E-mail de test envoyé à {to}.")
     except email.EmailError as exc:
         flash(request, str(exc), "error")
+    return redirect("/reglages#email")
+
+
+@router.post("/reglages-microsoft/connexion")
+def microsoft_login(request: Request, user: User = Depends(admin)):
+    """Étape 1 : Microsoft fournit un code que l'utilisateur saisit sur microsoft.com/devicelogin."""
+    try:
+        login = microsoft.start_device_login(user.org)
+    except microsoft.MicrosoftError as exc:
+        flash(request, str(exc), "error")
+        return redirect("/reglages#email")
+    return render(request, "microsoft_login.html", login=login)
+
+
+@router.post("/reglages-microsoft/verifier")
+def microsoft_poll(user: User = Depends(admin)):
+    """Étape 2 (appelée par la page toutes les quelques secondes) : la connexion a-t-elle été acceptée ?"""
+    try:
+        return JSONResponse(microsoft.poll_device_login(user.org))
+    except microsoft.MicrosoftError as exc:
+        return JSONResponse({"status": "error", "message": str(exc)})
+
+
+@router.get("/reglages-microsoft/termine")
+def microsoft_done(request: Request, user: User = Depends(admin)):
+    account = settings.get(user.org, "ms_account")
+    flash(request, f"Compte Microsoft connecté : {account}. Envoyez-vous un e-mail de test pour vérifier."
+          if account else "Connexion Microsoft non finalisée.", "ok" if account else "error")
+    return redirect("/reglages#email")
+
+
+@router.post("/reglages-microsoft/deconnexion")
+def microsoft_logout(request: Request, user: User = Depends(admin)):
+    microsoft.disconnect(user.org)
+    flash(request, "Compte Microsoft déconnecté. Pensez aussi à retirer l'accès sur account.microsoft.com → Confidentialité → Applications.")
     return redirect("/reglages#email")
 
 

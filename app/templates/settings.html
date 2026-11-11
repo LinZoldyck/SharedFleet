@@ -60,7 +60,7 @@
     <p class="muted">Le code part automatiquement par chaque canal coché, si le client a le numéro ou l'adresse correspondant.</p>
     <label class="check field"><input type="checkbox" name="code_by_sms" {{ 'checked' if s.code_by_sms }}> Par SMS</label>
     <label class="check field"><input type="checkbox" name="code_by_email" {{ 'checked' if s.code_by_email }}> Par e-mail
-      {% if s.email_provider == "off" %}<span class="badge gray">e-mail non configuré</span>{% endif %}</label>
+      {% if s.email_provider == "off" or (s.email_provider == "microsoft" and not ms_connected) %}<span class="badge gray">e-mail non configuré</span>{% endif %}</label>
     <button class="btn primary">Enregistrer</button>
   </form>
 </div>
@@ -72,7 +72,18 @@
       <select id="email_provider" name="email_provider">
         <option value="off" {{ 'selected' if s.email_provider == 'off' }}>Désactivé</option>
         <option value="console" {{ 'selected' if s.email_provider == 'console' }}>Test — l'e-mail est seulement écrit dans le journal</option>
-        <option value="smtp" {{ 'selected' if s.email_provider == 'smtp' }}>Serveur SMTP (Brevo, OVH, Gmail…)</option></select></div>
+        <option value="microsoft" {{ 'selected' if s.email_provider == 'microsoft' }}>Outlook.com / Hotmail / Microsoft 365 — connexion Microsoft (OAuth)</option>
+        <option value="smtp" {{ 'selected' if s.email_provider == 'smtp' }}>Serveur SMTP avec mot de passe (Brevo, OVH, Gmail…)</option></select></div>
+
+    <h3 style="font-size:.95rem;margin:18px 0 8px">Avec Outlook / Microsoft</h3>
+    <div class="grid g2">
+      {{ field("ms_client_id", "Identifiant d'application (client ID)", s.ms_client_id, placeholder="00000000-0000-0000-0000-000000000000", help="Obtenu en inscrivant SharedFleet dans le portail Microsoft Entra — voir le guide ci-dessous.", attrs='autocomplete="off"') }}
+      <div class="field"><label for="ms_tenant">Type de compte</label><select id="ms_tenant" name="ms_tenant">
+        <option value="consumers" {{ 'selected' if s.ms_tenant == 'consumers' }}>Personnel — @outlook.fr, @hotmail.fr, @live.fr</option>
+        <option value="organizations" {{ 'selected' if s.ms_tenant == 'organizations' }}>Professionnel — Microsoft 365</option></select></div>
+    </div>
+
+    <h3 style="font-size:.95rem;margin:10px 0 8px">Avec un serveur SMTP</h3>
     <div class="grid g3">
       {{ field("smtp_host", "Serveur SMTP", s.smtp_host, placeholder="smtp.gmail.com") }}
       {{ field("smtp_port", "Port", s.smtp_port, placeholder="587", attrs='inputmode="numeric"') }}
@@ -88,6 +99,25 @@
     <p class="help" style="margin-top:-6px">Les réponses de vos clients arrivent sur l'e-mail de la société (section Société), s'il est différent.</p>
     <button class="btn primary">Enregistrer</button>
   </form>
+  <div class="note {{ 'warn' if s.ms_error }}" style="margin-top:16px">
+    <b>Compte Microsoft :</b>
+    {% if ms_connected %}<span class="badge green">connecté</span> {{ s.ms_account }}{% else %}<span class="badge gray">non connecté</span>{% endif %}
+    {% if s.ms_error %}<br>{{ s.ms_error }}{% endif %}
+    <div class="actions" style="margin-top:8px">
+      <form method="post" action="/reglages-microsoft/connexion"><button class="btn small primary" {{ 'disabled' if not s.ms_client_id }}>{{ "Reconnecter" if ms_connected else "Se connecter avec Microsoft" }}</button></form>
+      {% if ms_connected %}<form method="post" action="/reglages-microsoft/deconnexion" data-confirm="Déconnecter le compte Microsoft ? Les codes ne partiront plus par e-mail."><button class="btn small">Déconnecter</button></form>{% endif %}
+    </div>
+    {% if not s.ms_client_id %}<small class="muted">Enregistrez d'abord l'identifiant d'application.</small>{% endif %}
+  </div>
+  <details style="margin-top:10px"><summary class="muted" style="cursor:pointer">Guide : obtenir l'identifiant d'application Microsoft (une seule fois, ≈ 15 min)</summary>
+    <ol style="padding-left:18px;margin:10px 0 0;line-height:1.7">
+      <li>Ouvrez <span class="mono">entra.microsoft.com</span> et connectez-vous avec votre adresse Outlook. S'il vous demande de créer un annuaire (« tenant »), créez un compte Azure gratuit.</li>
+      <li><b>Applications → Inscriptions d'applications → Nouvelle inscription</b>. Nom : <i>SharedFleet</i>. Types de comptes : <b>Comptes Microsoft personnels uniquement</b> (ou « tout annuaire et comptes personnels »). Pas d'URI de redirection.</li>
+      <li>Dans l'application créée, onglet <b>Authentification</b> → « Autoriser les flux de clients publics » : <b>Oui</b> → Enregistrer.</li>
+      <li>Onglet <b>Vue d'ensemble</b> : copiez l'<b>ID d'application (client)</b> et collez-le ci-dessus, puis Enregistrer.</li>
+      <li>Cliquez sur <b>Se connecter avec Microsoft</b>, saisissez le code affiché sur la page Microsoft et acceptez l'autorisation « Envoyer des e-mails ».</li>
+    </ol>
+  </details>
   <form method="post" action="/reglages-email-test" class="inline" style="margin-top:14px;max-width:460px">
     <div><label for="email_to">Tester l'envoi vers</label><input type="email" id="email_to" name="to" value="{{ user.email }}" required></div><button class="btn">Envoyer un e-mail de test</button></form>
 </div>

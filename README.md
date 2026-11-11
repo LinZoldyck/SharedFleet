@@ -71,8 +71,9 @@ copie datée et cohérente ; planifiez-le avec cron.
 2. **Réglages → Société** — identité, **logo**, conditions générales de votre contrat.
 3. **Réglages → Envoi du code d'accès** — choisissez SMS, e-mail ou les deux.
    - **SMS** : Twilio ou une passerelle HTTP. En mode « test », le SMS est seulement écrit dans le journal.
-   - **E-mail** : un serveur SMTP avec identifiant et mot de passe (Brevo, OVH, Gmail…). Avec Gmail, créez un
-     « mot de passe d'application ». Outlook.com / Hotmail n'est pas compatible : Microsoft y exige OAuth. Le bouton « Envoyer un e-mail de test » vérifie la configuration.
+   - **E-mail avec Outlook.com / Hotmail / Microsoft 365** : connexion Microsoft (OAuth), voir ci-dessous.
+   - **E-mail avec un autre service** : un serveur SMTP avec identifiant et mot de passe (Brevo, OVH, Gmail…).
+     Avec Gmail, créez un « mot de passe d'application ». Le bouton « Envoyer un e-mail de test » vérifie la configuration.
      L'e-mail contient le code et le lien, jamais le code de la boîte à clés.
 4. **Réglages → Getaround** — jeton d'API propriétaire (à demander à `owner-api@getaround.com`), puis
    communiquez à Getaround l'URL de webhook affichée. Sans webhook, la relève se fait toutes les 5 minutes.
@@ -80,6 +81,30 @@ copie datée et cohérente ; planifiez-le avec cron.
    l'assistant a le droit de donner.
 6. **Réglages → Facturation** — jeton Pennylane, ou factures PDF locales.
 7. **Réglages → Extension Chrome** — générez votre jeton.
+
+### Envoyer les e-mails depuis Outlook (OAuth)
+
+Microsoft n'accepte plus le mot de passe pour l'envoi d'e-mails depuis Outlook.com. SharedFleet se connecte
+donc à votre compte comme une application : vous l'autorisez une fois, il reçoit un jeton (conservé chiffré),
+et ne connaît jamais votre mot de passe.
+
+1. **Inscrire SharedFleet chez Microsoft** (une seule fois) : [entra.microsoft.com](https://entra.microsoft.com),
+   connexion avec votre adresse Outlook. Si le portail demande un annuaire (« tenant »), créez un compte Azure
+   gratuit.
+   - Applications → Inscriptions d'applications → **Nouvelle inscription** ; nom *SharedFleet* ; types de comptes :
+     **Comptes Microsoft personnels uniquement** ; pas d'URI de redirection.
+   - Onglet **Authentification** → « Autoriser les flux de clients publics » : **Oui**.
+   - Onglet **Vue d'ensemble** → copiez l'**ID d'application (client)**.
+2. **Réglages → E-mail** : Envoi « Outlook.com / Hotmail / Microsoft 365 », collez l'identifiant, type de compte
+   « Personnel », Enregistrer.
+3. **Se connecter avec Microsoft** : un code s'affiche ; ouvrez `microsoft.com/devicelogin` (sur l'ordinateur ou
+   le téléphone), saisissez le code, connectez-vous et acceptez « Envoyer des e-mails ». La page se met à jour
+   toute seule.
+4. **Envoyer un e-mail de test.**
+
+Cette « connexion par code » fonctionne même si le Raspberry n'est joignable qu'en `http://` sur votre réseau.
+Les e-mails partent de votre adresse Outlook (`smtp-mail.outlook.com`, XOAUTH2). La connexion est renouvelée
+automatiquement chaque jour ; si Microsoft la révoque, les réglages l'indiquent et il suffit de se reconnecter.
 
 ### Dossier des contraventions
 
@@ -111,6 +136,7 @@ Navigateur / téléphone client ──► FastAPI (app/main.py)
                                    │    ├─ pdf.py         contrat et facture
                                    │    ├─ sms.py         fournisseurs SMS
                                    │    ├─ email.py       envoi SMTP (code d'accès)
+                                   │    ├─ microsoft.py   connexion OAuth Outlook (jetons, XOAUTH2)
                                    │    ├─ dashboard.py   indicateurs
                                    │    └─ scheduler.py   tâches de fond (SMS, synchro, relève du dossier)
                                    └─ SQLite + fichiers dans DATA_DIR
@@ -130,6 +156,9 @@ Les jetons d'API sont chiffrés en base avec `SECRET_KEY`.
   encore contre un compte réel. Les factures sont créées en brouillon par défaut.
 - **Getaround** : intégration écrite d'après la spécification OpenAPI officielle et testée contre une API
   simulée ; à valider avec votre jeton.
+- **Outlook (OAuth)** : testé contre un serveur Microsoft simulé et un vrai serveur SMTP local parlant XOAUTH2,
+  pas encore contre le vrai compte Microsoft. Certaines boîtes Outlook.com ont l'envoi SMTP bloqué par Microsoft
+  (« SmtpClientAuthentication disabled ») : dans ce cas il faut un autre service d'envoi.
 - **Extension** : les règles de remplissage reposent sur les libellés des champs et sont testées sur un
   formulaire fictif (`tests/extension/`). À ajuster dans `extension/fill.js` au premier essai réel sur l'ANTAI.
 - **Contrat** : les conditions générales fournies sont un texte type ; remplacez-les par les vôtres et

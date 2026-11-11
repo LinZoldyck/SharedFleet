@@ -66,3 +66,19 @@ document.querySelectorAll("[data-copy]").forEach((btn) => {
     const old = btn.textContent; btn.textContent = "Copié ✓"; setTimeout(() => { btn.textContent = old; }, 1500);
   });
 });
+
+// Attente d'une validation externe (connexion Microsoft) : interroge le serveur jusqu'au résultat.
+document.querySelectorAll("[data-poll]").forEach((box) => {
+  const status = document.getElementById("poll-status");
+  const every = Math.max(3, Number(box.dataset.pollEvery) || 5) * 1000;
+  const tick = async () => {
+    try {
+      const r = await fetch(box.dataset.poll, { method: "POST", headers: { "Content-Type": "application/json" } });
+      const data = await r.json();
+      if (data.status === "ok") { location.href = box.dataset.pollDone; return; }
+      if (data.status === "error") { status.textContent = data.message; status.style.color = "var(--red)"; return; }
+    } catch (e) { /* réseau momentanément indisponible : on réessaie */ }
+    setTimeout(tick, every);
+  };
+  setTimeout(tick, every);
+});

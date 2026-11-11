@@ -6,7 +6,7 @@ from datetime import timedelta
 from ..db import SessionLocal
 from ..models import Organization
 from ..timeutil import now
-from . import bookings, fines, getaround, settings
+from . import bookings, fines, getaround, microsoft, settings
 
 RETRY_MINUTES = 10  # délai avant de retenter l'envoi d'un code qui a échoué
 
@@ -41,7 +41,16 @@ def scan_fines() -> None:
             fines.scan_inbox(db, org)
 
 
-JOBS = ((send_due_codes, 60), (scan_fines, 120), (sync_getaround, 300))  # (tâche, période en secondes)
+def refresh_microsoft() -> None:
+    with SessionLocal() as db:
+        for org in db.query(Organization):
+            try:
+                microsoft.keep_alive(org)
+            except microsoft.MicrosoftError as exc:
+                log.warning("Connexion Microsoft (%s) : %s", org.name, exc)
+
+
+JOBS = ((send_due_codes, 60), (scan_fines, 120), (sync_getaround, 300), (refresh_microsoft, 86400))  # (tâche, période en secondes)
 
 
 async def run() -> None:
