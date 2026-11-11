@@ -9,7 +9,7 @@ from ..db import get_db
 from ..models import Booking, Customer, Organization, User, Vehicle
 from ..security import current_user, manager
 from ..services import bookings as svc
-from ..services import getaround, invoicing, media, pdf
+from ..services import email, getaround, invoicing, media, pdf
 from ..timeutil import now
 from ..web import flash, owned, read_uploads, redirect, render, to_datetime, to_float, to_int
 
@@ -78,7 +78,7 @@ def create_booking(request: Request, vehicle_id: int = Form(), customer_id: int 
     b.access_code = svc.new_access_code(db)
     db.add(b)
     db.commit()
-    flash(request, f"Location {b.reference} créée. Le contrat est prêt ; le code d'accès partira par SMS 30 minutes avant le départ.")
+    flash(request, f"Location {b.reference} créée. Le contrat est prêt ; le code d'accès sera envoyé au client 30 minutes avant le départ.")
     error = getaround.block_calendar(user.org, b)
     if error:
         flash(request, f"Le calendrier Getaround n'a pas pu être bloqué : {error} Bloquez le créneau à la main.", "error")
@@ -89,7 +89,8 @@ def create_booking(request: Request, vehicle_id: int = Form(), customer_id: int 
 def booking_detail(bid: int, request: Request, user: User = Depends(current_user), db: Session = Depends(get_db)):
     b = owned(db, Booking, bid, user)
     return render(request, "booking_detail.html", b=b, lines=invoicing.booking_lines(b),
-                  provider=invoicing.PROVIDER_LABELS)
+                  provider=invoicing.PROVIDER_LABELS, code_history=svc.code_history(db, b),
+                  email_on=email.enabled(user.org), channels=CHANNEL_LABELS)
 
 
 @router.get("/locations/{bid}/contrat.pdf")
@@ -99,13 +100,23 @@ def contract(bid: int, user: User = Depends(current_user), db: Session = Depends
                     headers={"Content-Disposition": f'inline; filename="contrat-{b.reference}.pdf"'})
 
 
+CHANNEL_LABELS = {"sms": "SMS", "email": "e-mail"}
+
+
 @router.post("/locations/{bid}/code")
-def send_code(bid: int, request: Request, user: User = Depends(manager), db: Session = Depends(get_db)):
+def send_code(bid: int, request: Request, channel: str = Form("auto"), user: User = Depends(manager),
+              db: Session = Depends(get_db)):
     b = owned(db, Booking, bid, user)
-    if svc.send_access_code(db, user.org, b):
-        flash(request, f"Code d'accès envoyé par SMS au {b.customer.phone}.")
-    else:
-        flash(request, "SMS non envoyé : vérifiez le téléphone du client et le fournisseur SMS dans les réglages.", "error")
+    results = svc.send_access_code(db, user.org, b, channels=(channel,) if channel in CHANNEL_LABELS else None)
+    if not results:
+        flash(request, "Aucun envoi possible : ajoutez un téléphone ou un e-mail au client, et activez un canal dans "
+                       "Réglages → Envoi du code d'accès.", "error")
+    for ch, outcome in results.items():
+        target = b.customer.phone if ch == "sms" else b.customer.email
+        if outcome == "ok":
+            flash(request, f"Code d'accès envoyé par {CHANNEL_LABELS[ch]} ({target}).")
+        else:
+            flash(request, f"{CHANNEL_LABELS[ch].capitalize()} non envoyé à {target} : {outcome}", "error")
     return redirect(f"/locations/{bid}")
 
 

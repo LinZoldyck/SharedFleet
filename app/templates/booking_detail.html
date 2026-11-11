@@ -65,12 +65,23 @@
     <h2>Accès du client</h2>
     <dl class="kv">
       <dt>Code d'accès</dt><dd><span class="mono">{{ b.access_code }}</span></dd>
-      <dt>SMS</dt><dd>{% if b.code_sent_at %}Envoyé le {{ b.code_sent_at|dt }}{% else %}Envoi automatique 30 min avant le départ{% endif %}</dd>
+      <dt>Envoi</dt><dd>{% if b.code_sent_at %}Envoyé le {{ b.code_sent_at|dt }}{% else %}Automatique 30 min avant le départ{% endif %}</dd>
       <dt>Boîte à clés</dt><dd><span class="mono">{{ b.vehicle.lock_code or "non renseigné" }}</span></dd>
       <dt>Page client</dt><dd><span class="mono">{{ config.BASE_URL }}/acces</span></dd>
     </dl>
+    {% if code_history %}
+    <div style="margin-top:10px">{% for h in code_history %}
+      <div style="font-size:.86rem;padding:3px 0">{% if h.ok %}<span class="badge green">{{ channels[h.channel] }}</span>{% else %}<span class="badge red">{{ channels[h.channel] }} : échec</span>{% endif %}
+        <span class="muted">{{ h.at|dt }} · {{ h.to }}</span>{% if h.error %}<br><small class="muted">{{ h.error }}</small>{% endif %}</div>{% endfor %}</div>
+    {% endif %}
     {% if user.role != "viewer" and b.status in ("confirmed", "in_progress") %}
-    <form method="post" action="/locations/{{ b.id }}/code" style="margin-top:12px"><button class="btn small">{{ "Renvoyer" if b.code_sent_at else "Envoyer" }} le code par SMS maintenant</button></form>{% endif %}
+    <div class="actions" style="margin-top:12px">
+      {% if b.customer and b.customer.phone %}<form method="post" action="/locations/{{ b.id }}/code"><input type="hidden" name="channel" value="sms"><button class="btn small">Envoyer par SMS</button></form>{% endif %}
+      {% if b.customer and b.customer.email and email_on %}<form method="post" action="/locations/{{ b.id }}/code"><input type="hidden" name="channel" value="email"><button class="btn small">Envoyer par e-mail</button></form>{% endif %}
+    </div>
+    {% if b.customer and not b.customer.phone and not b.customer.email %}<div class="note warn">Le client n'a ni téléphone ni e-mail : le code ne pourra pas lui être envoyé. <a href="/clients/{{ b.customer.id }}">Compléter sa fiche</a></div>
+    {% elif b.customer and b.customer.email and not email_on and user.role == "admin" %}<div class="note">Le client a un e-mail : <a href="/reglages#email">activez l'envoi par e-mail</a> pour lui envoyer aussi le code ainsi.</div>{% endif %}
+    {% endif %}
     {% if not b.vehicle.lock_code %}<div class="note warn">Renseignez le code du Master Lock sur la <a href="/vehicules/{{ b.vehicle.id }}">fiche du véhicule</a>.</div>{% endif %}
   </div>
   <div class="card">

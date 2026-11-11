@@ -10,7 +10,7 @@ messagerie, contraventions, facturation et tableau de bord. Conçue pour tourner
 |---|---|
 | Comptes, rôles, authentification | Une société = un espace isolé. Rôles Administrateur / Gestionnaire / Lecture seule. |
 | Contrat de location hors plateforme | PDF généré à la création de la location : logo en en-tête, conditions générales modifiables, photos **avant** et **après**. |
-| Parcours client sans contact | Code à 6 chiffres envoyé par SMS 30 min avant le départ → code du Master Lock → état des lieux (photos, km, carburant) → même chemin au retour. |
+| Parcours client sans contact | Code à 6 chiffres envoyé par **SMS et / ou e-mail** 30 min avant le départ → code du Master Lock → état des lieux (photos, km, carburant) → même chemin au retour. |
 | Assistant de messagerie Getaround | Claude répond aux questions simples et vous transmet tout ce qui relève d'une décision. Mode brouillon ou automatique. |
 | Contraventions | Avis déposés dans un dossier (ou depuis le navigateur) → lecture → rapprochement avec la location Getaround ou directe et son conducteur. |
 | Désignation du conducteur | Extension Chrome qui remplit les champs à chaque étape ; captcha et validation restent manuels. FPS traités à part (paiement + refacturation). |
@@ -69,7 +69,11 @@ copie datée et cohérente ; planifiez-le avec cron.
 
 1. **Véhicules** — nom, plaque, code du Master Lock, tarif journalier, coûts fixes mensuels.
 2. **Réglages → Société** — identité, **logo**, conditions générales de votre contrat.
-3. **Réglages → SMS** — Twilio ou une passerelle HTTP. En mode « test », le SMS est seulement écrit dans le journal.
+3. **Réglages → Envoi du code d'accès** — choisissez SMS, e-mail ou les deux.
+   - **SMS** : Twilio ou une passerelle HTTP. En mode « test », le SMS est seulement écrit dans le journal.
+   - **E-mail** : n'importe quel serveur SMTP (Gmail, Outlook, OVH, Brevo…). Avec Gmail ou Outlook, créez un
+     « mot de passe d'application ». Le bouton « Envoyer un e-mail de test » vérifie la configuration.
+     L'e-mail contient le code et le lien, jamais le code de la boîte à clés.
 4. **Réglages → Getaround** — jeton d'API propriétaire (à demander à `owner-api@getaround.com`), puis
    communiquez à Getaround l'URL de webhook affichée. Sans webhook, la relève se fait toutes les 5 minutes.
 5. **Réglages → Assistant** — clé d'API Claude, mode (brouillon conseillé au début), informations que
@@ -106,6 +110,7 @@ Navigateur / téléphone client ──► FastAPI (app/main.py)
                                    │    ├─ invoicing.py   fournisseurs de facturation (Pennylane, local)
                                    │    ├─ pdf.py         contrat et facture
                                    │    ├─ sms.py         fournisseurs SMS
+                                   │    ├─ email.py       envoi SMTP (code d'accès)
                                    │    ├─ dashboard.py   indicateurs
                                    │    └─ scheduler.py   tâches de fond (SMS, synchro, relève du dossier)
                                    └─ SQLite + fichiers dans DATA_DIR

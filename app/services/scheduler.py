@@ -1,20 +1,28 @@
-"""Tâches de fond : envoi des codes d'accès par SMS, synchronisation Getaround, relève du dossier des contraventions."""
+"""Tâches de fond : envoi des codes d'accès (SMS / e-mail), synchronisation Getaround, relève du dossier des contraventions."""
 import asyncio
 import logging
+from datetime import timedelta
 
 from ..db import SessionLocal
 from ..models import Organization
+from ..timeutil import now
 from . import bookings, fines, getaround, settings
+
+RETRY_MINUTES = 10  # délai avant de retenter l'envoi d'un code qui a échoué
 
 log = logging.getLogger("sharedfleet.scheduler")
 
 
 def send_due_codes() -> int:
     with SessionLocal() as db:
-        due = bookings.due_for_code(db)
-        for b in due:
+        sent = 0
+        for b in bookings.due_for_code(db):
+            last = bookings.code_history(db, b)
+            if last and last[0]["at"] > now() - timedelta(minutes=RETRY_MINUTES):
+                continue  # échec récent : on réessaie plus tard plutôt qu'à chaque minute
             bookings.send_access_code(db, db.get(Organization, b.org_id), b)
-        return len(due)
+            sent += 1
+        return sent
 
 
 def sync_getaround() -> None:

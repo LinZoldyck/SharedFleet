@@ -2,7 +2,7 @@
 {% block content %}
 <form class="card" method="post" action="/acces" style="margin-top:12vh">
   <h1>Bonjour 👋</h1>
-  <p class="muted" style="margin:6px 0 18px">Saisissez le code à 6 chiffres reçu par SMS pour accéder à votre location.</p>
+  <p class="muted" style="margin:6px 0 18px">Saisissez le code à 6 chiffres reçu par SMS ou par e-mail pour accéder à votre location.</p>
   <label for="code">Code d'accès</label>
   <input class="codeinput" type="text" id="code" name="code" inputmode="numeric" pattern="[0-9 ]*" maxlength="7" autocomplete="one-time-code" required autofocus>
   <button class="btn primary big" style="margin-top:14px">Accéder à ma location</button>

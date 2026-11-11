@@ -10,7 +10,7 @@
     {{ field("model", "Modèle", v.model, placeholder="Master L2H2") }}
   </div>
   {{ field("address", "Lieu de prise en charge", v.address, placeholder="12 rue des Entrepreneurs, 69007 Lyon") }}
-  {{ field("lock_code", "Code du Master Lock (boîte à clés)", v.lock_code, help="Montré au client uniquement après saisie de son code d'accès reçu par SMS.", attrs='autocomplete="off"') }}
+  {{ field("lock_code", "Code du Master Lock (boîte à clés)", v.lock_code, help="Montré au client uniquement après saisie de son code d'accès (reçu par SMS ou e-mail).", attrs='autocomplete="off"') }}
   <h2 style="margin-top:8px">Location directe</h2>
   <div class="grid g2">
     {{ field("daily_rate", "Tarif HT par jour (€)", v.daily_rate, attrs='inputmode="decimal"') }}

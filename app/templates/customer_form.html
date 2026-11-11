@@ -14,7 +14,7 @@
   <div class="grid g2">
     {{ field("first_name", "Prénom", c.first_name) }}{{ field("last_name", "Nom", c.last_name) }}
     {{ field("phone", "Téléphone portable", c.phone, type="tel", help="Reçoit le code d'accès par SMS.") }}
-    {{ field("email", "E-mail", c.email, type="email") }}
+    {{ field("email", "E-mail", c.email, type="email", help="Reçoit le code d'accès par e-mail (si activé) et les factures.") }}
   </div>
   {{ field("address", "Adresse", c.address) }}
   <div class="grid g3">{{ field("postal_code", "Code postal", c.postal_code) }}{{ field("city", "Ville", c.city) }}{{ field("country", "Pays", c.country) }}</div>

@@ -5,7 +5,7 @@ from ..models import Organization
 from ..security import decrypt, encrypt
 
 SECRET_KEYS = {"getaround_token", "getaround_webhook_secret", "anthropic_api_key", "twilio_token", "pennylane_token",
-               "sms_http_token"}
+               "sms_http_token", "smtp_password"}
 
 DEFAULT_TERMS = """1. Objet — Le loueur met à disposition du locataire le véhicule désigné, pour la durée et au prix indiqués au présent contrat.
 2. Conducteur — Le véhicule ne peut être conduit que par le locataire ou les conducteurs qu'il désigne, titulaires d'un permis de conduire valide correspondant à la catégorie du véhicule.
@@ -25,6 +25,9 @@ DEFAULTS = {
     "getaround_block_calendar": True, "getaround_include_insurance": False,
     "assistant_mode": "draft",  # off | draft (brouillon à valider) | auto (envoi automatique)
     "assistant_instructions": "",
+    "code_by_sms": True, "code_by_email": True,  # canaux d'envoi du code d'accès
+    "email_provider": "off",  # off | console | smtp
+    "smtp_host": "", "smtp_port": "", "smtp_security": "starttls", "smtp_user": "", "email_from": "", "email_from_name": "",
     "sms_provider": "console",  # console | twilio | http
     "twilio_sid": "", "twilio_from": "", "sms_http_url": "",
     "invoice_provider": "local",  # local | pennylane

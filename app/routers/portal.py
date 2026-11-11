@@ -1,5 +1,5 @@
 """Parcours du client (location hors plateforme), pensé pour le téléphone :
-code reçu par SMS → code de la boîte à clés → état des lieux de départ → … → état des lieux de retour."""
+code reçu par SMS ou e-mail → code de la boîte à clés → état des lieux de départ → … → état des lieux de retour."""
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, Response
 from sqlalchemy.orm import Session

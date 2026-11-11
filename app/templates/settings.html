@@ -54,8 +54,46 @@
   </form>
 </div>
 
+<div class="card" id="code">
+  <h2>Envoi du code d'accès — 30 minutes avant le départ</h2>
+  <form method="post" action="/reglages/code">
+    <p class="muted">Le code part automatiquement par chaque canal coché, si le client a le numéro ou l'adresse correspondant.</p>
+    <label class="check field"><input type="checkbox" name="code_by_sms" {{ 'checked' if s.code_by_sms }}> Par SMS</label>
+    <label class="check field"><input type="checkbox" name="code_by_email" {{ 'checked' if s.code_by_email }}> Par e-mail
+      {% if s.email_provider == "off" %}<span class="badge gray">e-mail non configuré</span>{% endif %}</label>
+    <button class="btn primary">Enregistrer</button>
+  </form>
+</div>
+
+<div class="card" id="email">
+  <h2>E-mail</h2>
+  <form method="post" action="/reglages/email">
+    <div class="field"><label for="email_provider">Envoi</label>
+      <select id="email_provider" name="email_provider">
+        <option value="off" {{ 'selected' if s.email_provider == 'off' }}>Désactivé</option>
+        <option value="console" {{ 'selected' if s.email_provider == 'console' }}>Test — l'e-mail est seulement écrit dans le journal</option>
+        <option value="smtp" {{ 'selected' if s.email_provider == 'smtp' }}>Serveur SMTP (Gmail, Outlook, OVH, Brevo…)</option></select></div>
+    <div class="grid g3">
+      {{ field("smtp_host", "Serveur SMTP", s.smtp_host, placeholder="smtp.gmail.com") }}
+      {{ field("smtp_port", "Port", s.smtp_port, placeholder="587", attrs='inputmode="numeric"') }}
+      <div class="field"><label for="smtp_security">Chiffrement</label><select id="smtp_security" name="smtp_security">
+        {% for key, label in smtp_security.items() %}<option value="{{ key }}" {{ 'selected' if s.smtp_security == key }}>{{ label }}</option>{% endfor %}</select></div>
+      {{ field("smtp_user", "Identifiant", s.smtp_user, attrs='autocomplete="off"') }}
+      {{ secret_field("smtp_password", "Mot de passe", secret.smtp_password, "Gmail / Outlook : créez un « mot de passe d'application ».") }}
+    </div>
+    <div class="grid g2">
+      {{ field("email_from", "Adresse d'expédition", s.email_from, type="email", placeholder="location@votre-domaine.fr") }}
+      {{ field("email_from_name", "Nom de l'expéditeur", s.email_from_name, placeholder=s.company_name or org.name) }}
+    </div>
+    <p class="help" style="margin-top:-6px">Les réponses de vos clients arrivent sur l'e-mail de la société (section Société), s'il est différent.</p>
+    <button class="btn primary">Enregistrer</button>
+  </form>
+  <form method="post" action="/reglages-email-test" class="inline" style="margin-top:14px;max-width:460px">
+    <div><label for="email_to">Tester l'envoi vers</label><input type="email" id="email_to" name="to" value="{{ user.email }}" required></div><button class="btn">Envoyer un e-mail de test</button></form>
+</div>
+
 <div class="card" id="sms">
-  <h2>SMS — code d'accès envoyé 30 minutes avant le départ</h2>
+  <h2>SMS</h2>
   <form method="post" action="/reglages/sms">
     <div class="field"><label for="sms_provider">Fournisseur</label>
       <select id="sms_provider" name="sms_provider">

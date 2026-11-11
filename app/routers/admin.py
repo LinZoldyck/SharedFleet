@@ -8,7 +8,7 @@ from .. import config
 from ..db import get_db
 from ..models import ROLES, User
 from ..security import admin, hash_password, token_hash
-from ..services import fines, media, settings, sms
+from ..services import email, fines, media, settings, sms
 from ..web import flash, owned, redirect, render, to_float
 
 router = APIRouter()
@@ -19,10 +19,13 @@ SECTIONS = {
                 "company_vat", "company_phone", "company_email", "contract_terms"),
     "getaround": ("getaround_token", "getaround_webhook_secret"),
     "assistant": ("anthropic_api_key", "assistant_mode", "assistant_instructions"),
+    "email": ("email_provider", "smtp_host", "smtp_port", "smtp_security", "smtp_user", "smtp_password", "email_from",
+              "email_from_name"),
     "sms": ("sms_provider", "twilio_sid", "twilio_token", "twilio_from", "sms_http_url", "sms_http_token"),
     "facturation": ("invoice_provider", "pennylane_token", "invoice_prefix"),
+    "code": (),
 }
-CHECKBOXES = {"getaround": ("getaround_block_calendar", "getaround_include_insurance"), "facturation": ("invoice_draft",)}
+CHECKBOXES = {"code": ("code_by_sms", "code_by_email"), "getaround": ("getaround_block_calendar", "getaround_include_insurance"), "facturation": ("invoice_draft",)}
 
 
 @router.get("/reglages")
@@ -31,7 +34,7 @@ def settings_page(request: Request, user: User = Depends(admin), db: Session = D
     values = {k: settings.get(org, k) for k in settings.DEFAULTS}
     secrets_set = {k: settings.has(org, k) for k in settings.SECRET_KEYS}
     users = db.query(User).filter_by(org_id=org.id).order_by(User.id).all()
-    return render(request, "settings.html", s=values, secret=secrets_set, users=users, org=org,
+    return render(request, "settings.html", s=values, smtp_security=email.SECURITY, secret=secrets_set, users=users, org=org,
                   webhook_url=f"{config.BASE_URL}/webhooks/getaround/{org.webhook_key}",
                   fines_inbox=fines.inbox(org.id), new_token=request.session.pop("new_token", None))
 
@@ -72,6 +75,23 @@ def sms_test(request: Request, to: str = Form(), user: User = Depends(admin)):
     flash(request, "SMS de test envoyé (en mode console, il est seulement écrit dans le journal)." if ok
           else "Échec de l'envoi : vérifiez les paramètres.", "ok" if ok else "error")
     return redirect("/reglages#sms")
+
+
+@router.post("/reglages-email-test")
+def email_test(request: Request, to: str = Form(), user: User = Depends(admin)):
+    if not email.looks_valid(to):
+        flash(request, "Adresse e-mail invalide.", "error")
+        return redirect("/reglages#email")
+    name = settings.get(user.org, "company_name") or user.org.name
+    try:
+        email.send(user.org, email.build(user.org, to, "", f"{name} : e-mail de test", "Cet e-mail de test confirme "
+                   "que SharedFleet peut envoyer les codes d'accès à vos clients.",
+                   "<p>{{logo}}</p><p>Cet e-mail de test confirme que SharedFleet peut envoyer les codes d'accès à vos clients.</p>"))
+        flash(request, "E-mail de test envoyé (en mode test, il est seulement écrit dans le journal)."
+              if settings.get(user.org, "email_provider") == "console" else f"E-mail de test envoyé à {to}.")
+    except email.EmailError as exc:
+        flash(request, str(exc), "error")
+    return redirect("/reglages#email")
 
 
 @router.post("/reglages-jeton")

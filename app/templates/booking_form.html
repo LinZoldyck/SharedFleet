@@ -1,7 +1,7 @@
 {% extends "base.html" %}{% from "_macros.html" import field %}
 {% block title %}Nouvelle location · SharedFleet{% endblock %}
 {% block content %}
-<div class="head"><div><h1>Nouvelle location directe</h1><div class="sub">Le contrat est généré automatiquement ; le client reçoit son code par SMS 30 minutes avant le départ.</div></div></div>
+<div class="head"><div><h1>Nouvelle location directe</h1><div class="sub">Le contrat est généré automatiquement ; le client reçoit son code d'accès par SMS et / ou e-mail 30 minutes avant le départ.</div></div></div>
 {% if not vehicles or not customers %}
 <div class="card empty"><b>Il manque {{ "un véhicule" if not vehicles else "un client" }}</b>
   <a class="btn primary" href="{{ '/vehicules/nouveau' if not vehicles else '/clients/nouveau' }}">Ajouter {{ "un véhicule" if not vehicles else "un client" }}</a></div>
