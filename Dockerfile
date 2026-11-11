@@ -8,9 +8,11 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app ./app
+COPY deploy/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN useradd --create-home --uid 1000 sharedfleet && mkdir /data && chown sharedfleet /data
-USER sharedfleet
 VOLUME /data
+# Le conteneur démarre en root le temps de corriger les droits de /data, puis l'application tourne en uid 1000
+ENTRYPOINT ["entrypoint.sh"]
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \

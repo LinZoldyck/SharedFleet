@@ -46,7 +46,7 @@ Passez ensuite `ALLOW_SIGNUP=false` dans `.env` si vous ne voulez pas d'autres s
 Pour essayer avec des données fictives (3 véhicules, 12 mois d'activité) :
 
 ```bash
-docker compose exec sharedfleet python -m app.seed
+docker compose exec -u sharedfleet sharedfleet python -m app.seed
 ```
 
 Identifiants de démonstration : `demo@sharedfleet.local` / `demonstration`.
