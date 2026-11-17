@@ -36,7 +36,12 @@ class GetaroundClient:
             r = self.http.request(method, url, **kw)
             r.raise_for_status()
         except httpx.HTTPStatusError as exc:
-            raise GetaroundError(f"Getaround a répondu {exc.response.status_code} sur {url}") from exc
+            code = exc.response.status_code
+            hint = {401: "jeton refusé : vérifiez qu'il est complet, sans le mot « Bearer », et toujours actif",
+                    403: "accès refusé : ce jeton n'a pas les droits sur cette ressource",
+                    404: "ressource introuvable",
+                    429: "trop d'appels (limite Getaround : 100 par minute) — réessayez dans une minute"}.get(code, "erreur du serveur Getaround")
+            raise GetaroundError(f"Getaround a répondu {code} ({hint}).") from exc
         except httpx.HTTPError as exc:
             raise GetaroundError(f"Getaround injoignable : {exc}") from exc
         return r
@@ -147,7 +152,8 @@ def _upsert_driver(db: Session, org: Organization, api: GetaroundClient, user_id
     return c
 
 
-def sync_rental(db: Session, org: Organization, api: GetaroundClient, rental_id, canceled: bool = False) -> Booking | None:
+def sync_rental(db: Session, org: Organization, api: GetaroundClient, rental_id, canceled: bool = False,
+                relink: bool = True) -> Booking | None:
     booking = db.query(Booking).filter_by(org_id=org.id, source="getaround", external_id=str(rental_id)).first()
     if canceled:
         if booking:
@@ -157,7 +163,7 @@ def sync_rental(db: Session, org: Organization, api: GetaroundClient, rental_id,
     r = api.rental(rental_id)
     find = lambda: db.query(Vehicle).filter_by(org_id=org.id, getaround_car_id=r["car_id"]).first()  # noqa: E731
     vehicle = find()
-    if not vehicle:  # voiture pas encore rattachée (premier webhook avant toute synchronisation) : on rattache puis on réessaie
+    if not vehicle and relink:  # voiture pas encore rattachée (premier webhook avant toute synchronisation) : on rattache puis on réessaie
         sync_cars(db, org, api)
         vehicle = find()
     if not vehicle:
@@ -208,11 +214,13 @@ def sync_all(db: Session, org: Organization, days_back: int = 30, days_ahead: in
         raise GetaroundError("Jeton Getaround non configuré.")
     from .assistant import handle_incoming  # import tardif : évite la dépendance circulaire
 
-    stats = {"cars": sync_cars(db, org, api), "rentals": 0, "messages": 0}
+    stats = {"cars": sync_cars(db, org, api), "rentals": 0, "messages": 0, "ignored": 0}
     t = now()
     for rid in api.rental_ids(t - timedelta(days=days_back), t + timedelta(days=days_ahead)):
-        if sync_rental(db, org, api, rid):
+        if sync_rental(db, org, api, rid, relink=False):  # voitures déjà rattachées juste au-dessus
             stats["rentals"] += 1
+        else:
+            stats["ignored"] += 1
     # Messages : seulement les locations à venir, en cours, ou terminées depuis moins de 7 jours
     recent = db.query(Booking).filter(Booking.org_id == org.id, Booking.source == "getaround",
                                       Booking.status != "cancelled", Booking.ends_at > t - timedelta(days=7))
@@ -262,3 +270,62 @@ def block_calendar(org: Organization, booking: Booking, release: bool = False) -
     except GetaroundError as exc:
         return str(exc)
     return None
+
+
+def diagnose(db: Session, org: Organization, days_back: int = 30, days_ahead: int = 60) -> list[dict]:
+    """Vérifie la connexion étape par étape. Chaque étape : {ok, title, detail, lines}. S'arrête à la première
+    étape bloquante. Limité à une vingtaine d'appels pour rester loin de la limite de 100 par minute."""
+    steps: list[dict] = []
+
+    def step(ok, title, detail="", items=None):
+        steps.append({"ok": ok, "title": title, "detail": detail, "lines": items or []})
+        return ok
+
+    token = settings.get(org, "getaround_token")
+    if not step(bool(token), "Jeton d'API enregistré",
+                f"{len(token)} caractères" if token else "Aucun jeton : collez-le dans Réglages → Getaround puis Enregistrer."):
+        return steps
+    if token.lower().startswith("bearer "):
+        step(False, "Format du jeton", "Le jeton commence par « Bearer » : collez uniquement la suite.")
+        return steps
+    api = GetaroundClient(token)
+    try:
+        cars = api.cars()
+    except GetaroundError as exc:
+        step(False, "Connexion à l'API Getaround", str(exc))
+        return steps
+    step(True, "Connexion à l'API Getaround", "Jeton accepté.")
+
+    vehicles = db.query(Vehicle).filter_by(org_id=org.id).all()
+    by_plate = {normalize_plate(v.plate): v for v in vehicles}
+    items, linked = [], 0
+    for car in cars:
+        v = by_plate.get(normalize_plate(car.get("plate_number", "")))
+        linked += bool(v)
+        name = " ".join(x for x in (car.get("brand"), car.get("model")) if x)
+        items.append(f"{car.get('plate_number') or '?'} — {name or 'voiture'} ({car.get('state', '?')}) → "
+                     + (f"relié à « {v.name} »" if v else "aucun véhicule SharedFleet avec cette plaque"))
+    if not cars:
+        step(False, "Voitures du compte Getaround", "Getaround ne renvoie aucune voiture pour ce jeton : vérifiez "
+             "qu'il s'agit bien du jeton du compte propriétaire des véhicules.")
+        return steps
+    if not vehicles:
+        detail = "Aucun véhicule créé dans SharedFleet : ajoutez vos véhicules avec la même plaque que sur Getaround."
+    elif linked < len(cars):
+        detail = (f"{linked} voiture(s) sur {len(cars)} reliée(s). Les locations des autres sont ignorées : "
+                  "corrigez la plaque de vos véhicules dans SharedFleet pour qu'elle corresponde.")
+    else:
+        detail = f"Les {len(cars)} voiture(s) sont reliées à vos véhicules."
+    step(linked == len(cars), "Voitures Getaround ↔ véhicules SharedFleet", detail, items)
+
+    t = now()
+    try:
+        ids = api.rental_ids(t - timedelta(days=days_back), t + timedelta(days=days_ahead))
+    except GetaroundError as exc:
+        step(False, "Locations", str(exc))
+        return steps
+    step(bool(ids), "Locations trouvées",
+         f"{len(ids)} location(s) entre le {t - timedelta(days=days_back):%d/%m/%Y} et le {t + timedelta(days=days_ahead):%d/%m/%Y}."
+         if ids else f"Aucune location entre le {t - timedelta(days=days_back):%d/%m/%Y} et le "
+                     f"{t + timedelta(days=days_ahead):%d/%m/%Y}. Les locations plus anciennes ne sont pas importées.")
+    return steps

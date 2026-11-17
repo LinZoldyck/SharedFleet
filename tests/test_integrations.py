@@ -25,7 +25,9 @@ class FakeGetaround:
                          2: {"id": 2, "rental_id": 77, "sending_user_id": 999, "sent_at": to_iso(start), "content": "2,50 m."}}
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
-        assert request.headers["authorization"] == "Bearer TOKEN"
+        self.calls = getattr(self, "calls", []) + [request.url.path]
+        if request.headers["authorization"] != "Bearer TOKEN":
+            return httpx.Response(401, json={"error": "unauthorized"})
         path, body = request.url.path.removeprefix("/owner/v1"), json.loads(request.content or b"{}")
         if path == "/cars.json":
             return httpx.Response(200, json=[{"id": 9}])
@@ -74,7 +76,7 @@ def test_secrets_are_encrypted_at_rest(connected, db):
 def test_sync_imports_rentals_drivers_and_messages(connected, db):
     org, _ = connected
     stats = getaround.sync_all(db, org)
-    assert stats == {"cars": 1, "rentals": 1, "messages": 1}
+    assert stats == {"cars": 1, "rentals": 1, "messages": 1, "ignored": 0}
     b = db.query(Booking).filter_by(source="getaround").one()
     assert b.reference == "GA-77" and b.price_ht == 120.50 and b.status == "in_progress"
     assert b.vehicle.getaround_car_id == 9  # rattaché par la plaque AB-123-CD
@@ -268,3 +270,57 @@ def test_pennylane_invoice_payload(fleet, db):
     invoicing.PROVIDERS["pennylane"].transport = httpx.MockTransport(lambda r: httpx.Response(422, text="invalid"))
     with pytest.raises(invoicing.InvoicingError):
         invoicing.create_invoice(db, org, customer, lines, "KO")
+
+
+
+# --- diagnostic « pas de location dans l'application » ---
+@pytest.fixture
+def fake_api(monkeypatch):
+    fake = FakeGetaround(now() - timedelta(hours=2), now() + timedelta(hours=20))
+    monkeypatch.setattr(getaround, "GetaroundClient", lambda token, transport=None, _real=getaround.GetaroundClient:
+                        _real(token, transport=httpx.MockTransport(fake)))
+    return fake
+
+
+def test_unlinked_car_is_reported_without_hammering_the_api(client, connected, db):
+    org, fake = connected
+    vehicle = db.query(Vehicle).one()
+    vehicle.plate = "ZZ-999-ZZ"  # plaque différente de celle enregistrée chez Getaround
+    db.commit()
+    fake.calls = []
+    stats = getaround.sync_all(db, org)
+    assert stats["rentals"] == 0 and stats["ignored"] == 1
+    assert fake.calls.count("/owner/v1/cars.json") == 1  # la liste des voitures n'est lue qu'une fois
+    client.post("/getaround/synchroniser")
+    assert "1 location(s) ignorée(s)" in client.get("/locations").text
+
+
+def test_diagnostic_points_to_plate_mismatch(client, fleet, db, fake_api):
+    org = db.query(Organization).one()
+    settings.update(org, {"getaround_token": "TOKEN"})
+    vehicle = db.query(Vehicle).one()
+    vehicle.plate = "ZZ-999-ZZ"
+    db.commit()
+    page = client.post("/reglages-getaround-test").text
+    assert "Jeton accepté" in page and "AB123CD" in page and "aucun véhicule SharedFleet avec cette plaque" in page
+    assert "0 voiture(s) sur 1 reliée(s)" in page
+    assert "synchroniser maintenant" not in page  # pas de « tout est bon » tant qu'une étape bloque
+    vehicle.plate = "ab 123 cd"  # même plaque, autre écriture : reconnue
+    db.commit()
+    page = client.post("/reglages-getaround-test").text
+    assert "relié à « Master »" in page and "1 location(s)" in page and "synchroniser maintenant" in page
+
+
+def test_diagnostic_without_vehicles_and_with_bad_token(client, db, fake_api):
+    org = db.query(Organization).one()
+    assert "Aucun jeton" in client.post("/reglages-getaround-test").text
+    settings.update(org, {"getaround_token": "TOKEN"})
+    db.commit()
+    assert "Aucun véhicule créé dans SharedFleet" in client.post("/reglages-getaround-test").text
+    settings.update(org, {"getaround_token": "MAUVAIS"})
+    db.commit()
+    page = client.post("/reglages-getaround-test").text
+    assert "401" in page and "jeton refusé" in page
+    settings.update(org, {"getaround_token": "Bearer TOKEN"})
+    db.commit()
+    assert "collez uniquement la suite" in client.post("/reglages-getaround-test").text

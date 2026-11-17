@@ -56,6 +56,9 @@ def sync_now(request: Request, user: User = Depends(manager), db: Session = Depe
         s = getaround.sync_all(db, user.org)
         flash(request, f"Getaround synchronisé : {s['rentals']} location(s), {s['messages']} nouveau(x) message(s), "
                        f"{s['cars']} véhicule(s) rattaché(s).")
+        if s["ignored"]:
+            flash(request, f"{s['ignored']} location(s) ignorée(s) : leur voiture Getaround n'est reliée à aucun véhicule "
+                           "SharedFleet (plaques différentes). Lancez le test de connexion dans Réglages → Getaround.", "error")
     except getaround.GetaroundError as exc:
         flash(request, str(exc), "error")
     return redirect(request.headers.get("referer") or "/locations")

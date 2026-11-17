@@ -95,6 +95,12 @@ def email_test(request: Request, to: str = Form(), user: User = Depends(admin)):
     return redirect("/reglages#email")
 
 
+@router.post("/reglages-getaround-test")
+def getaround_test(request: Request, user: User = Depends(admin), db: Session = Depends(get_db)):
+    from ..services import getaround
+    return render(request, "getaround_test.html", steps=getaround.diagnose(db, user.org))
+
+
 @router.post("/reglages-microsoft/connexion")
 def microsoft_login(request: Request, user: User = Depends(admin)):
     """Étape 1 : Microsoft fournit un code que l'utilisateur saisit sur microsoft.com/devicelogin."""

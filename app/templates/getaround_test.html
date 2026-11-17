@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Test Getaround · SharedFleet{% endblock %}
+{% block content %}
+<div class="head"><div><h1>Test de la connexion Getaround</h1><div class="sub">Chaque étape est vérifiée dans l'ordre ; le test s'arrête à la première qui bloque.</div></div>
+  <a class="btn" href="/reglages#getaround">Retour aux réglages</a></div>
+<div class="card">
+  {% for st in steps %}
+  <div style="display:flex;gap:12px;padding:12px 0;{{ 'border-top:1px solid var(--line)' if not loop.first }}">
+    <span class="badge {{ 'green' if st.ok else 'red' }}" style="height:fit-content">{{ "OK" if st.ok else "À corriger" }}</span>
+    <div style="min-width:0"><b>{{ st.title }}</b><div class="muted">{{ st.detail }}</div>
+      {% if st.lines %}<ul style="margin:8px 0 0;padding-left:18px">{% for it in st.lines %}<li>{{ it }}</li>{% endfor %}</ul>{% endif %}</div>
+  </div>
+  {% endfor %}
+</div>
+{% if steps and steps|selectattr('ok', 'equalto', false)|list|length == 0 %}
+<form method="post" action="/getaround/synchroniser"><button class="btn primary">Tout est bon : synchroniser maintenant</button></form>
+{% endif %}
+{% endblock %}
