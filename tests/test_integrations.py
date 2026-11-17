@@ -33,6 +33,10 @@ class FakeGetaround:
             return httpx.Response(200, json=[{"id": 9}])
         if path == "/cars/9.json":
             return httpx.Response(200, json={"id": 9, "state": "active", "plate_number": "AB123CD", "brand": "Renault", "model": "Master"})
+        if path == "/invoices.json":
+            return httpx.Response(200, json=[{"id": 31}])
+        if path == "/invoices/31.json":
+            return httpx.Response(200, json={"id": 31, "entity_type": "Company", "total_price": 9640, "currency": "EUR"})
         if path == "/rentals.json":
             return httpx.Response(200, json=[{"id": 77}])
         if path == "/rentals/77.json":
@@ -324,3 +328,42 @@ def test_diagnostic_without_vehicles_and_with_bad_token(client, db, fake_api):
     settings.update(org, {"getaround_token": "Bearer TOKEN"})
     db.commit()
     assert "collez uniquement la suite" in client.post("/reglages-getaround-test").text
+
+
+
+def test_empty_car_list_is_worked_around_through_rentals(client, fleet, db, monkeypatch):
+    """Cas réel signalé : jeton accepté mais /cars.json vide. Les voitures sont retrouvées via les locations."""
+    fake = FakeGetaround(now() - timedelta(hours=2), now() + timedelta(hours=20))
+
+    def handler(request):
+        if request.url.path == "/owner/v1/cars.json":
+            return httpx.Response(200, json=[])
+        return fake(request)
+
+    monkeypatch.setattr(getaround, "GetaroundClient", lambda token, transport=None, _real=getaround.GetaroundClient:
+                        _real(token, transport=httpx.MockTransport(handler)))
+    monkeypatch.setattr(getaround, "client_for", lambda o: getaround.GetaroundClient("TOKEN"))
+    org = db.query(Organization).one()
+    settings.update(org, {"getaround_token": "TOKEN"})
+    db.commit()
+    page = client.post("/reglages-getaround-test").text
+    assert "liste de voitures vide" in page and "1 location(s)" in page
+    assert "voiture AB123CD" in page and "relié à « Master »" in page
+    assert "SharedFleet retrouve désormais les voitures à partir des locations" in page
+    assert "Société" in page  # type d'entité lu sur la facture
+    fake.calls = []
+    stats = getaround.sync_all(db, org)
+    assert stats["rentals"] == 1 and stats["ignored"] == 0
+    assert db.query(Booking).one().vehicle.plate == "AB-123-CD"
+    assert fake.calls.count("/owner/v1/cars/9.json") == 1
+
+
+def test_valid_token_without_any_data_is_explained(client, fleet, db, monkeypatch):
+    empty = httpx.MockTransport(lambda r: httpx.Response(200, json=[]))
+    monkeypatch.setattr(getaround, "GetaroundClient", lambda token, transport=None, _real=getaround.GetaroundClient:
+                        _real(token, transport=empty))
+    org = db.query(Organization).one()
+    settings.update(org, {"getaround_token": "TOKEN"})
+    db.commit()
+    page = client.post("/reglages-getaround-test").text
+    assert "ne donne accès à aucune donnée" in page and "autre compte ou à une autre entité" in page

@@ -58,6 +58,15 @@ class GetaroundClient:
     def cars(self) -> list[dict]:
         return [self._request("GET", f"/cars/{c['id']}.json").json() for c in self._list("/cars.json")]
 
+    def car(self, car_id) -> dict:
+        return self._request("GET", f"/cars/{car_id}.json").json()
+
+    def invoice_ids(self, start: datetime, end: datetime) -> list[int]:
+        return [i["id"] for i in self._list("/invoices.json", {"start_date": to_iso(start), "end_date": to_iso(end)})]
+
+    def invoice(self, invoice_id) -> dict:
+        return self._request("GET", f"/invoices/{invoice_id}.json").json()
+
     def rental_ids(self, start: datetime, end: datetime) -> list[int]:
         """Locations réservées entre deux dates. L'API refuse les fenêtres de plus de 30 jours : on découpe."""
         ids: list[int] = []
@@ -132,6 +141,31 @@ def sync_cars(db: Session, org: Organization, api: GetaroundClient) -> int:
     return linked
 
 
+def link_car(db: Session, org: Organization, api: GetaroundClient, car_id, tried: set | None = None) -> Vehicle | None:
+    """Rattache une voiture par sa fiche (/cars/{id}) quand elle n'apparaît pas dans la liste /cars.
+
+    Certains comptes reçoivent une liste de voitures vide alors que les locations sont accessibles : la voiture est
+    alors retrouvée à partir de l'identifiant indiqué dans la location. `tried` évite de la redemander à chaque location.
+    """
+    if tried is not None:
+        if car_id in tried:
+            return None
+        tried.add(car_id)
+    try:
+        car = api.car(car_id)
+    except GetaroundError as exc:
+        log.warning("Fiche de la voiture Getaround %s illisible : %s", car_id, exc)
+        return None
+    plate = normalize_plate(car.get("plate_number", ""))
+    vehicle = next((v for v in db.query(Vehicle).filter_by(org_id=org.id) if plate and normalize_plate(v.plate) == plate), None)
+    if vehicle:
+        vehicle.getaround_car_id = car["id"]
+        db.commit()
+    else:
+        log.warning("Voiture Getaround %s (%s) : aucun véhicule SharedFleet avec cette plaque", car_id, car.get("plate_number"))
+    return vehicle
+
+
 def _upsert_driver(db: Session, org: Organization, api: GetaroundClient, user_id: int) -> Customer:
     """Le conducteur Getaround devient un client : ses coordonnées servent à la désignation en cas d'amende."""
     c = db.query(Customer).filter_by(org_id=org.id, getaround_user_id=user_id).first()
@@ -153,7 +187,7 @@ def _upsert_driver(db: Session, org: Organization, api: GetaroundClient, user_id
 
 
 def sync_rental(db: Session, org: Organization, api: GetaroundClient, rental_id, canceled: bool = False,
-                relink: bool = True) -> Booking | None:
+                relink: bool = True, tried_cars: set | None = None) -> Booking | None:
     booking = db.query(Booking).filter_by(org_id=org.id, source="getaround", external_id=str(rental_id)).first()
     if canceled:
         if booking:
@@ -166,6 +200,8 @@ def sync_rental(db: Session, org: Organization, api: GetaroundClient, rental_id,
     if not vehicle and relink:  # voiture pas encore rattachée (premier webhook avant toute synchronisation) : on rattache puis on réessaie
         sync_cars(db, org, api)
         vehicle = find()
+    if not vehicle:
+        vehicle = link_car(db, org, api, r["car_id"], tried_cars)
     if not vehicle:
         log.warning("Location Getaround %s ignorée : voiture %s non rattachée à un véhicule", rental_id, r["car_id"])
         return None
@@ -216,8 +252,9 @@ def sync_all(db: Session, org: Organization, days_back: int = 30, days_ahead: in
 
     stats = {"cars": sync_cars(db, org, api), "rentals": 0, "messages": 0, "ignored": 0}
     t = now()
+    tried_cars: set = set()  # voitures dont la fiche a déjà été demandée pendant cette synchronisation
     for rid in api.rental_ids(t - timedelta(days=days_back), t + timedelta(days=days_ahead)):
-        if sync_rental(db, org, api, rid, relink=False):  # voitures déjà rattachées juste au-dessus
+        if sync_rental(db, org, api, rid, relink=False, tried_cars=tried_cars):  # liste des voitures déjà lue au-dessus
             stats["rentals"] += 1
         else:
             stats["ignored"] += 1
@@ -306,26 +343,58 @@ def diagnose(db: Session, org: Organization, days_back: int = 30, days_ahead: in
         items.append(f"{car.get('plate_number') or '?'} — {name or 'voiture'} ({car.get('state', '?')}) → "
                      + (f"relié à « {v.name} »" if v else "aucun véhicule SharedFleet avec cette plaque"))
     if not cars:
-        step(False, "Voitures du compte Getaround", "Getaround ne renvoie aucune voiture pour ce jeton : vérifiez "
-             "qu'il s'agit bien du jeton du compte propriétaire des véhicules.")
-        return steps
-    if not vehicles:
-        detail = "Aucun véhicule créé dans SharedFleet : ajoutez vos véhicules avec la même plaque que sur Getaround."
-    elif linked < len(cars):
-        detail = (f"{linked} voiture(s) sur {len(cars)} reliée(s). Les locations des autres sont ignorées : "
-                  "corrigez la plaque de vos véhicules dans SharedFleet pour qu'elle corresponde.")
+        step(False, "Liste des voitures du compte", "Getaround renvoie une liste de voitures vide pour ce jeton. "
+             "Le test continue avec les locations et les factures pour savoir si le jeton donne accès à vos données.")
+    elif not vehicles:
+        step(False, "Voitures Getaround ↔ véhicules SharedFleet",
+             "Aucun véhicule créé dans SharedFleet : ajoutez vos véhicules avec la même plaque que sur Getaround.", items)
     else:
-        detail = f"Les {len(cars)} voiture(s) sont reliées à vos véhicules."
-    step(linked == len(cars), "Voitures Getaround ↔ véhicules SharedFleet", detail, items)
+        step(linked == len(cars), "Voitures Getaround ↔ véhicules SharedFleet",
+             f"Les {len(cars)} voiture(s) sont reliées à vos véhicules." if linked == len(cars) else
+             f"{linked} voiture(s) sur {len(cars)} reliée(s). Les locations des autres sont ignorées : "
+             "corrigez la plaque de vos véhicules dans SharedFleet pour qu'elle corresponde.", items)
 
     t = now()
+    start, end = t - timedelta(days=days_back), t + timedelta(days=days_ahead)
     try:
-        ids = api.rental_ids(t - timedelta(days=days_back), t + timedelta(days=days_ahead))
+        ids = api.rental_ids(start, end)
     except GetaroundError as exc:
         step(False, "Locations", str(exc))
         return steps
-    step(bool(ids), "Locations trouvées",
-         f"{len(ids)} location(s) entre le {t - timedelta(days=days_back):%d/%m/%Y} et le {t + timedelta(days=days_ahead):%d/%m/%Y}."
-         if ids else f"Aucune location entre le {t - timedelta(days=days_back):%d/%m/%Y} et le "
-                     f"{t + timedelta(days=days_ahead):%d/%m/%Y}. Les locations plus anciennes ne sont pas importées.")
+    rental_lines, rental_cars_ok = [], 0
+    for rid in ids[:3]:  # quelques locations suffisent pour vérifier le rattachement des voitures
+        try:
+            r = api.rental(rid)
+            car = api.car(r["car_id"])
+            v = by_plate.get(normalize_plate(car.get("plate_number", "")))
+            rental_cars_ok += 1
+            rental_lines.append(f"Location {rid} du {to_local(r['starts_at']):%d/%m/%Y} → voiture {car.get('plate_number') or r['car_id']} → "
+                                + (f"relié à « {v.name} »" if v else "aucun véhicule SharedFleet avec cette plaque"))
+        except (GetaroundError, KeyError) as exc:
+            rental_lines.append(f"Location {rid} : lecture impossible ({exc})")
+    step(bool(ids), "Locations accessibles",
+         f"{len(ids)} location(s) réservée(s) entre le {start:%d/%m/%Y} et le {end:%d/%m/%Y}." if ids else
+         f"Aucune location réservée entre le {start:%d/%m/%Y} et le {end:%d/%m/%Y}.", rental_lines)
+
+    try:
+        invoices = api.invoice_ids(t - timedelta(days=30), t)
+        entity = api.invoice(invoices[0]).get("entity_type", "") if invoices else ""
+        step(True, "Factures accessibles (30 derniers jours)",
+             f"{len(invoices)} facture(s)" + (f", émises pour un compte « {'Société' if entity == 'Company' else 'Particulier'} »." if entity else ".")
+             if invoices else "Aucune facture sur les 30 derniers jours.")
+    except (GetaroundError, IndexError) as exc:
+        step(False, "Factures", str(exc))
+        invoices = []
+
+    # Conclusion
+    if not cars and not ids and not invoices:
+        step(False, "Conclusion", "Le jeton est valide mais ne donne accès à aucune donnée (ni voiture, ni location, ni "
+             "facture). Il est très probablement rattaché à un autre compte ou à une autre entité (particulier / société) "
+             "que celui qui détient vos voitures. Demandez à Getaround de vérifier le compte associé au jeton.")
+    elif not cars and ids and rental_cars_ok:
+        step(True, "Conclusion", "La liste des voitures est vide mais les locations et les fiches des voitures sont "
+             "accessibles : SharedFleet retrouve désormais les voitures à partir des locations. Lancez la synchronisation.")
+    elif not cars and ids:
+        step(False, "Conclusion", "Les locations sont visibles mais pas les fiches des voitures : le jeton n'a pas tous les "
+             "droits. Demandez à Getaround un accès complet à l'API propriétaire pour ce compte.")
     return steps
