@@ -5,7 +5,26 @@ services:
     restart: unless-stopped
     env_file: .env
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     volumes:
       # Base SQLite, photos, logo et dossier de dépôt des contraventions (à sauvegarder)
       - ./data:/data
+  duckdns:
+    image: lscr.io/linuxserver/duckdns:latest
+    restart: unless-stopped
+    environment:
+      SUBDOMAINS: sahloue
+      TOKEN: ${DUCKDNS_TOKEN}
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "192.168.1.31:80:80"
+      - "192.168.1.31:443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+    depends_on: [sharedfleet]
+
+volumes:
+  caddy_data:
