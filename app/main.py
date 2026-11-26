@@ -10,7 +10,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from . import config
 from .db import init_db
-from .routers import admin, auth, billing, bookings, fines, fleet, home, messaging, portal
+from .routers import admin, auth, billing, bookings, fines, fleet, getaround_import, home, messaging, portal
 from .security import LoginRequired, same_origin
 from .services import scheduler
 from .web import redirect, render
@@ -77,5 +77,6 @@ def health():
     return {"status": "ok"}
 
 
-for module in (auth, home, bookings, fleet, messaging, fines, billing, admin, portal):
+for module in (auth, home, getaround_import, bookings,  # import avant bookings : sinon /locations/{id} capte l'URL
+                fleet, messaging, fines, billing, admin, portal):
     app.include_router(module.router)

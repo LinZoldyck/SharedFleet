@@ -216,11 +216,16 @@ def sync_rental(db: Session, org: Organization, api: GetaroundClient, rental_id,
         booking.customer = _upsert_driver(db, org, api, r["user_id"])
     except GetaroundError as exc:
         log.warning("Conducteur %s illisible : %s", r.get("user_id"), exc)
-    t = now()
     if booking.status != "cancelled":
-        booking.status = "completed" if booking.ends_at < t else "in_progress" if booking.starts_at <= t else "confirmed"
+        booking.status = status_for(booking.starts_at, booking.ends_at)
     db.commit()
     return booking
+
+
+def status_for(starts_at: datetime, ends_at: datetime) -> str:
+    """Statut d'une location non annulée d'après ses dates."""
+    t = now()
+    return "completed" if ends_at < t else "in_progress" if starts_at <= t else "confirmed"
 
 
 def sync_messages(db: Session, org: Organization, api: GetaroundClient, booking: Booking) -> list[Message]:
@@ -262,7 +267,13 @@ def sync_all(db: Session, org: Organization, days_back: int = 30, days_ahead: in
     recent = db.query(Booking).filter(Booking.org_id == org.id, Booking.source == "getaround",
                                       Booking.status != "cancelled", Booking.ends_at > t - timedelta(days=7))
     for booking in recent:
-        for msg in sync_messages(db, org, api, booking):
+        try:
+            fresh = sync_messages(db, org, api, booking)
+        except GetaroundError as exc:
+            # Location inconnue de l'API (par exemple importée à la main) : on passe à la suivante
+            log.warning("Messages de la location %s illisibles : %s", booking.reference, exc)
+            continue
+        for msg in fresh:
             stats["messages"] += 1
             handle_incoming(db, org, api, msg)
     return stats

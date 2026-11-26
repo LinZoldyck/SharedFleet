@@ -5,6 +5,7 @@
   <div><h1>Locations</h1><div class="sub">Getaround et locations directes, au même endroit</div></div>
   <div class="actions">
     <form method="post" action="/getaround/synchroniser"><button class="btn">Synchroniser Getaround</button></form>
+    {% if user.role != "viewer" %}<a class="btn" href="/locations/import-getaround">Importer des locations Getaround</a>{% endif %}
     <a class="btn primary" href="/locations/nouvelle">+ Nouvelle location directe</a>
   </div>
 </div>
@@ -21,7 +22,7 @@
       <div class="name">{{ row.vehicle.name }}<small class="muted">{{ row.vehicle.plate }}</small></div>
       <div class="track">
         {% for x in row.bars %}<a class="bar {{ x.b.source }}" href="/locations/{{ x.b.id }}" style="left:{{ x.left }}%;width:{{ x.width }}%"
-          data-tip="{{ x.b.reference }}&#10;{{ x.b.starts_at|dt }} → {{ x.b.ends_at|dt }}{% if x.b.customer %}&#10;{{ x.b.customer.label }}{% endif %}">{{ x.b.customer.label if x.b.customer else x.b.reference }}</a>{% endfor %}
+          data-tip="{{ x.b.reference }}&#10;{{ x.b.starts_at|dt }} → {{ x.b.ends_at|dt }}{% if x.b.renter_label %}&#10;{{ x.b.renter_label }}{% endif %}">{{ x.b.renter_label or x.b.reference }}</a>{% endfor %}
         <div class="nowline" style="left:{{ planning.now }}%"></div>
       </div>
     </div>
@@ -40,7 +41,7 @@
       <tr class="link" data-href="/locations/{{ b.id }}">
         <td><a href="/locations/{{ b.id }}"><b>{{ b.reference }}</b></a><br>{{ source(b) }}</td>
         <td>{{ b.vehicle.name }}<br><small>{{ b.vehicle.plate }}</small></td>
-        <td>{{ b.customer.label if b.customer else "—" }}</td>
+        <td>{{ b.renter_label or "—" }}</td>
         <td>{{ b.starts_at|dt }}</td><td>{{ b.ends_at|dt }}</td>
         <td class="r num">{{ b.price_ht|eur }}</td><td>{{ badge(b.status) }}</td>
       </tr>{% endfor %}

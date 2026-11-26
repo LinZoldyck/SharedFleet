@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Import des locations Getaround · SharedFleet{% endblock %}
+{% block content %}
+<div class="head">
+  <div><h1>Import manuel des locations Getaround</h1>
+    <div class="sub">Collez les locations relevées dans l'espace propriétaire Getaround. Réimporter le même tableau ne crée jamais de doublon.</div></div>
+  <a class="btn" href="/locations?f=getaround">Voir les locations Getaround</a>
+</div>
+
+{% if error %}<div class="flash error" role="alert">{{ error }}</div>{% endif %}
+
+{% if rows %}
+<div class="card">
+  <h2>{{ "Import effectué" if done else "Prévisualisation — rien n'a encore été enregistré" }}</h2>
+  <div class="actions" style="margin-bottom:12px">
+    {% for key, (label, color) in actions.items() %}<span class="badge {{ color }}">{{ label }} : {{ counts[key] }}</span>{% endfor %}
+  </div>
+  <div class="scroll"><table>
+    <thead><tr><th>#</th><th>Getaround</th><th>Véhicule</th><th>Début</th><th>Fin</th><th class="r">Montant</th><th>Action</th><th>Détail</th></tr></thead>
+    <tbody>{% for r in rows %}
+      <tr>
+        <td class="num">{{ r.index }}</td>
+        <td>{% if r.booking and r.booking.id %}<a href="/locations/{{ r.booking.id }}">{{ r.getaround_id }}</a>{% else %}{{ r.getaround_id or "—" }}{% endif %}</td>
+        <td>{{ r.vehicle.name if r.vehicle else (r.plate or "—") }}{% if r.vehicle %}<br><small class="muted">{{ r.vehicle.plate }}</small>{% endif %}</td>
+        <td>{{ r.starts_at|dt if r.starts_at else "—" }}</td><td>{{ r.ends_at|dt if r.ends_at else "—" }}</td>
+        <td class="r num">{{ r.price|eur if r.price is not none else "—" }}</td>
+        <td><span class="badge {{ r.label[1] }}">{{ r.label[0] }}</span></td>
+        <td><small>{{ r.reasons|join(" · ") }}</small>{% if r.renter %}<br><small class="muted">{{ r.renter }}{% if r.km is not none %} · {{ r.km }} km{% endif %}</small>{% endif %}</td>
+      </tr>{% endfor %}
+    </tbody>
+  </table></div>
+</div>
+{% endif %}
+
+<form class="card" method="post" action="/locations/import-getaround">
+  <div class="field">
+    <label for="payload">Tableau JSON des locations</label>
+    <textarea id="payload" name="payload" spellcheck="false" style="min-height:280px;font-family:ui-monospace,Menlo,monospace;font-size:.86rem" placeholder="{{ example }}">{{ text }}</textarea>
+    <div class="help">Heures de Paris, au format <span class="mono">2026-11-27T12:00</span>. Statut : <span class="mono">confirmee</span> ou <span class="mono">annulee</span>.
+      Champs facultatifs : <span class="mono">km</span>, <span class="mono">locataire</span>, <span class="mono">assurance</span>
+      ({{ "ajouté au revenu : option « inclure l'assurance » cochée" if with_insurance else "ignoré : option « inclure l'assurance » décochée" }}).</div>
+  </div>
+  <div class="actions">
+    <button class="btn" name="action" value="preview">Prévisualiser</button>
+    <button class="btn primary" name="action" value="import">Importer</button>
+  </div>
+</form>
+
+<details class="card"><summary style="cursor:pointer"><b>Format attendu</b></summary>
+<pre class="mono" style="display:block;white-space:pre;overflow-x:auto;padding:12px;margin-top:10px">{{ example }}</pre>
+<p class="muted" style="margin:0">Ce sont des locations Getaround : aucun client, contrat, code d'accès, blocage de calendrier ni facture n'est créé.</p>
+</details>
+{% endblock %}

@@ -44,7 +44,8 @@
       {% if b.source == "direct" %}<dt>Prix TTC</dt><dd class="num">{{ b.price_ttc|eur }} (TVA {{ "%g"|format(b.vat_rate) }} %)</dd>
       <dt>Km inclus</dt><dd>{{ b.km_included }} km</dd><dt>Dépôt de garantie</dt><dd class="num">{{ b.deposit|eur }}</dd>
       <dt>Contrat</dt><dd>{% if b.accepted_at %}Accepté par {{ b.accepted_by }} le {{ b.accepted_at|dt }}{% else %}En attente d'acceptation{% endif %}</dd>{% endif %}
-      {% if b.notes %}<dt>Conditions</dt><dd>{{ b.notes }}</dd>{% endif %}
+      {% if b.source == "getaround" and b.imported_km is not none %}<dt>Km parcourus</dt><dd>{{ b.imported_km }} km</dd>{% endif %}
+      {% if b.notes and b.source == "direct" %}<dt>Conditions</dt><dd>{{ b.notes }}</dd>{% endif %}
     </dl>
   </div>
   <div class="card">
@@ -55,6 +56,8 @@
       <dt>Téléphone</dt><dd>{{ c.phone or "—" }}</dd><dt>E-mail</dt><dd>{{ c.email or "—" }}</dd>
       <dt>Adresse</dt><dd>{{ c.address }} {{ c.postal_code }} {{ c.city }}</dd>
       <dt>Permis</dt><dd>{{ c.license_number or "—" }}</dd></dl>
+    {% elif b.imported_renter %}<dl class="kv"><dt>Nom</dt><dd>{{ b.imported_renter }}</dd></dl>
+    <p class="muted" style="margin-top:8px">Saisi lors de l'import manuel ; les coordonnées seront complétées par la synchro API.</p>
     {% else %}<p class="muted">Conducteur non communiqué par Getaround.</p>{% endif %}
   </div>
 </div>

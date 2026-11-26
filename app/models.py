@@ -128,6 +128,20 @@ class Booking(Base):
         return next((i for i in self.inspections if i.kind == kind), None)
 
     @property
+    def imported_renter(self) -> str:
+        """Nom du locataire saisi lors d'un import manuel Getaround (rangé dans les notes)."""
+        return next((line[12:] for line in (self.notes or "").splitlines() if line.startswith("Locataire : ")), "")
+
+    @property
+    def imported_km(self) -> int | None:
+        value = next((line[15:] for line in (self.notes or "").splitlines() if line.startswith("Km parcourus : ")), "")
+        return int(value) if value.isdigit() else None
+
+    @property
+    def renter_label(self) -> str:
+        return self.customer.label if self.customer else self.imported_renter
+
+    @property
     def reference(self) -> str:
         return f"GA-{self.external_id}" if self.source == "getaround" else f"LOC-{self.id:05d}"
 
