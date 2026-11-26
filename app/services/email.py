@@ -4,11 +4,14 @@ ou microsoft (Outlook.com / Microsoft 365 via OAuth, voir microsoft.py).
 SMTP couvre presque tous les services : Gmail / Google Workspace, Outlook / Microsoft 365, OVH, Brevo,
 Mailjet, Scaleway… L'envoi passe par la bibliothèque standard (smtplib), sans dépendance supplémentaire.
 """
+import base64
 import logging
 import smtplib
 import ssl
 from email.message import EmailMessage
-from email.utils import formataddr, make_msgid
+from email.utils import formataddr, getaddresses, make_msgid
+
+import httpx
 
 from ..models import Organization
 from . import media, microsoft, settings
@@ -100,8 +103,55 @@ def send(org: Organization, msg: EmailMessage) -> None:
         raise EmailError(f"Envoi impossible via {host}:{port} — {exc}") from exc
 
 
+def graph_payload(msg: EmailMessage) -> dict:
+    """Convertit le message en requête Microsoft Graph sendMail ; le logo devient une pièce jointe intégrée (cid:logo)."""
+    def recipients(header):
+        return [{"emailAddress": {"address": addr, **({"name": name} if name else {})}}
+                for name, addr in getaddresses([msg.get(header, "")]) if addr]
+
+    html, text = msg.get_body(("html",)), msg.get_body(("plain",))
+    body = {"contentType": "HTML", "content": html.get_content()} if html else {"contentType": "Text", "content": text.get_content()}
+    attachments = []
+    for part in msg.walk():
+        cid = part.get("Content-ID")
+        if cid and part.get_content_maintype() == "image":
+            attachments.append({"@odata.type": "#microsoft.graph.fileAttachment", "name": cid.strip("<>") + "." + part.get_content_subtype(),
+                                "contentType": part.get_content_type(), "isInline": True, "contentId": cid.strip("<>"),
+                                "contentBytes": base64.b64encode(part.get_payload(decode=True)).decode()})
+    message = {"subject": msg["Subject"], "body": body, "toRecipients": recipients("To")}
+    if msg.get("Reply-To"):
+        message["replyTo"] = recipients("Reply-To")
+    if attachments:
+        message["attachments"] = attachments
+    return {"message": message, "saveToSentItems": True}
+
+
+def _send_graph(org: Organization, msg: EmailMessage, token: str) -> None:
+    """Envoi par l'API Microsoft Graph (HTTPS). L'e-mail apparaît aussi dans « Éléments envoyés » d'Outlook."""
+    try:
+        with httpx.Client(transport=microsoft._transport, timeout=30) as http:
+            r = http.post(microsoft.GRAPH_SEND_URL, json=graph_payload(msg), headers={"Authorization": f"Bearer {token}"})
+    except httpx.HTTPError as exc:
+        raise EmailError(f"Microsoft Graph injoignable : {exc}") from exc
+    if r.is_success:  # 202 Accepted
+        return
+    try:
+        error = r.json().get("error", {})
+    except ValueError:
+        error = {}
+    code, detail = error.get("code", ""), (error.get("message") or r.text)[:200]
+    if r.status_code == 401:
+        raise EmailError("Microsoft a refusé le jeton : reconnectez le compte dans Réglages → E-mail.")
+    if r.status_code == 403:
+        raise EmailError("Autorisation « Envoyer des e-mails » manquante : cliquez sur « Reconnecter » et acceptez-la. "
+                         f"({code or detail})")
+    if r.status_code == 429:
+        raise EmailError("Microsoft limite temporairement les envois : réessayez dans quelques minutes.")
+    raise EmailError(f"Microsoft Graph a refusé l'envoi ({r.status_code} {code}) : {detail}")
+
+
 def _send_microsoft(org: Organization, msg: EmailMessage) -> None:
-    """SMTP + XOAUTH2 vers Outlook.com (smtp-mail.outlook.com) ou Microsoft 365 (smtp.office365.com), port 587."""
+    """Outlook.com / Microsoft 365 : via l'API Graph (par défaut) ou en SMTP + XOAUTH2 (port 587)."""
     account, host = settings.get(org, "ms_account"), microsoft.smtp_host(org)
     if not account:
         raise EmailError("Compte Microsoft non connecté (Réglages → E-mail → Se connecter avec Microsoft).")
@@ -109,6 +159,8 @@ def _send_microsoft(org: Organization, msg: EmailMessage) -> None:
         token = microsoft.access_token(org)
     except microsoft.MicrosoftError as exc:
         raise EmailError(str(exc)) from exc
+    if microsoft.method(org) == "graph":
+        return _send_graph(org, msg, token)
     # Au premier appel smtplib attend la réponse initiale ; si Microsoft répond par une erreur (334 + JSON),
     # il faut renvoyer une ligne vide pour obtenir le code d'échec définitif (535).
     auth = lambda challenge=None: microsoft.xoauth2(account, token) if challenge is None else ""  # noqa: E731
@@ -125,8 +177,8 @@ def _send_microsoft(org: Organization, msg: EmailMessage) -> None:
         detail = exc.smtp_error.decode(errors="replace") if isinstance(exc.smtp_error, bytes) else str(exc.smtp_error)
         if "disabled" in detail.lower():
             raise EmailError("Microsoft a bloqué l'envoi SMTP pour cette boîte (« SmtpClientAuthentication disabled »). "
-                             "Sur un compte Outlook.com, ce blocage ne se lève pas depuis les réglages : utilisez un "
-                             "autre service d'envoi.") from exc
+                             "Choisissez la méthode « API Microsoft Graph » dans Réglages → E-mail, enregistrez, puis "
+                             "cliquez sur « Reconnecter ».") from exc
         raise EmailError(f"Microsoft a refusé l'identification ({detail[:160]}). Reconnectez le compte dans les réglages.") from exc
     except smtplib.SMTPSenderRefused as exc:
         raise EmailError(f"Microsoft refuse d'envoyer au nom de {msg['From']} : l'expéditeur doit être {account}.") from exc

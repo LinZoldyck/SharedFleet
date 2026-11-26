@@ -103,7 +103,10 @@ et ne connaît jamais votre mot de passe.
 4. **Envoyer un e-mail de test.**
 
 Cette « connexion par code » fonctionne même si le Raspberry n'est joignable qu'en `http://` sur votre réseau.
-Les e-mails partent de votre adresse Outlook (`smtp-mail.outlook.com`, XOAUTH2). La connexion est renouvelée
+Les e-mails partent de votre adresse Outlook via l'**API Microsoft Graph** (HTTPS) et apparaissent dans vos
+Éléments envoyés. C'est la méthode par défaut : Microsoft bloque souvent le SMTP des boîtes Outlook.com
+(« SmtpClientAuthentication disabled »), mais pas Graph. La méthode SMTP (`smtp-mail.outlook.com`, XOAUTH2)
+reste disponible dans les réglages ; après tout changement de méthode, cliquez sur « Reconnecter ». La connexion est renouvelée
 automatiquement chaque jour ; si Microsoft la révoque, les réglages l'indiquent et il suffit de se reconnecter.
 
 ### Dossier des contraventions
@@ -156,9 +159,8 @@ Les jetons d'API sont chiffrés en base avec `SECRET_KEY`.
   encore contre un compte réel. Les factures sont créées en brouillon par défaut.
 - **Getaround** : intégration écrite d'après la spécification OpenAPI officielle et testée contre une API
   simulée ; à valider avec votre jeton.
-- **Outlook (OAuth)** : testé contre un serveur Microsoft simulé et un vrai serveur SMTP local parlant XOAUTH2,
-  pas encore contre le vrai compte Microsoft. Certaines boîtes Outlook.com ont l'envoi SMTP bloqué par Microsoft
-  (« SmtpClientAuthentication disabled ») : dans ce cas il faut un autre service d'envoi.
+- **Outlook (OAuth)** : Graph et SMTP testés contre des serveurs simulés (et un vrai serveur SMTP local parlant
+  XOAUTH2), pas encore contre le vrai compte Microsoft.
 - **Extension** : les règles de remplissage reposent sur les libellés des champs et sont testées sur un
   formulaire fictif (`tests/extension/`). À ajuster dans `extension/fill.js` au premier essai réel sur l'ANTAI.
 - **Contrat** : les conditions générales fournies sont un texte type ; remplacez-les par les vôtres et

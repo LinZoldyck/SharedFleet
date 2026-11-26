@@ -28,6 +28,7 @@ DEFAULTS = {
     "code_by_sms": True, "code_by_email": True,  # canaux d'envoi du code d'accès
     "email_provider": "off",  # off | console | smtp | microsoft
     "ms_client_id": "", "ms_tenant": "consumers", "ms_account": "", "ms_error": "",
+    "ms_method": "graph", "ms_connected_method": "",  # graph (API Microsoft Graph) | smtp (SMTP + XOAUTH2)
     "smtp_host": "", "smtp_port": "", "smtp_security": "starttls", "smtp_user": "", "email_from": "", "email_from_name": "",
     "sms_provider": "console",  # console | twilio | http
     "twilio_sid": "", "twilio_from": "", "sms_http_url": "",

@@ -21,7 +21,23 @@ from sqlalchemy.orm.attributes import set_committed_value
 from ..models import Organization
 from . import settings
 
-SCOPE = "https://outlook.office.com/SMTP.Send offline_access openid profile"
+# Un jeton Microsoft ne vaut que pour une seule API : le droit demandé dépend de la méthode d'envoi.
+#   graph : API Microsoft Graph (HTTPS). Fonctionne même quand Microsoft bloque le SMTP d'une boîte Outlook.com.
+#   smtp  : SMTP + XOAUTH2 (smtp-mail.outlook.com / smtp.office365.com).
+SCOPES = {"graph": "https://graph.microsoft.com/Mail.Send offline_access openid profile",
+          "smtp": "https://outlook.office.com/SMTP.Send offline_access openid profile"}
+SCOPE = SCOPES["smtp"]  # rétrocompatibilité
+GRAPH_SEND_URL = "https://graph.microsoft.com/v1.0/me/sendMail"
+
+
+def method(org: Organization) -> str:
+    """Méthode d'envoi choisie dans les réglages."""
+    return "smtp" if settings.get(org, "ms_method") == "smtp" else "graph"
+
+
+def connected_method(org: Organization) -> str:
+    """Méthode pour laquelle le compte a été connecté (les connexions d'avant Graph étaient en SMTP)."""
+    return settings.get(org, "ms_connected_method") or "smtp"
 SMTP_HOSTS = {"consumers": "smtp-mail.outlook.com"}  # comptes personnels ; Microsoft 365 : smtp.office365.com
 DEFAULT_HOST = "smtp.office365.com"
 
@@ -82,10 +98,12 @@ def _save(org: Organization, values: dict) -> None:
 def start_device_login(org: Organization) -> dict:
     if not settings.get(org, "ms_client_id").strip():
         raise MicrosoftError("Renseignez d'abord l'identifiant d'application (client ID) Microsoft.")
-    status, data = _post(org, "devicecode", {"scope": SCOPE})
+    status, data = _post(org, "devicecode", {"scope": SCOPES[method(org)]})
+    login_method = method(org)
     if status != 200 or "device_code" not in data:
         raise MicrosoftError(_explain(data))
-    _pending[org.id] = {"device_code": data["device_code"], "expires": time.time() + int(data.get("expires_in", 900)),
+    _pending[org.id] = {"device_code": data["device_code"], "method": login_method,
+                        "expires": time.time() + int(data.get("expires_in", 900)),
                         "interval": int(data.get("interval", 5))}
     return {"user_code": data["user_code"], "verification_uri": data.get("verification_uri", "https://microsoft.com/devicelogin"),
             "interval": int(data.get("interval", 5)), "expires_in": int(data.get("expires_in", 900))}
@@ -107,14 +125,15 @@ def poll_device_login(org: Organization) -> dict:
         return {"status": "error", "message": _explain(data)}
     account = _account_from_id_token(data.get("id_token", "")) or settings.get(org, "email_from")
     _access[org.id] = (data["access_token"], time.time() + int(data.get("expires_in", 3600)) - 120)
-    _save(org, {"ms_refresh_token": data["refresh_token"], "ms_account": account, "ms_error": ""})
+    _save(org, {"ms_refresh_token": data["refresh_token"], "ms_account": account, "ms_error": "",
+                "ms_connected_method": pending["method"]})
     return {"status": "ok", "account": account}
 
 
 def disconnect(org: Organization) -> None:
     _access.pop(org.id, None)
     _pending.pop(org.id, None)
-    _save(org, {"ms_refresh_token": "-", "ms_account": "", "ms_error": ""})
+    _save(org, {"ms_refresh_token": "-", "ms_account": "", "ms_error": "", "ms_connected_method": ""})
 
 
 # --- jeton d'accès ---
@@ -127,7 +146,11 @@ def access_token(org: Organization, force: bool = False) -> str:
         refresh = settings.get(org, "ms_refresh_token")
         if not refresh:
             raise MicrosoftError("Compte Microsoft non connecté (Réglages → E-mail → Se connecter avec Microsoft).")
-        status, data = _post(org, "token", {"grant_type": "refresh_token", "refresh_token": refresh, "scope": SCOPE})
+        if connected_method(org) != method(org):
+            raise MicrosoftError("La méthode d'envoi a changé : cliquez sur « Reconnecter » dans Réglages → E-mail pour "
+                                 "donner à SharedFleet l'autorisation correspondante.")
+        status, data = _post(org, "token", {"grant_type": "refresh_token", "refresh_token": refresh,
+                                            "scope": SCOPES[connected_method(org)]})
         if status != 200 or "access_token" not in data:
             message = _explain(data)
             if data.get("error") in ("invalid_grant", "interaction_required"):
@@ -146,7 +169,7 @@ def xoauth2(user: str, token: str) -> str:
 
 def keep_alive(org: Organization) -> None:
     """Renouvelle le jeton même sans envoi : un jeton de renouvellement inutilisé finit par expirer."""
-    if settings.get(org, "email_provider") == "microsoft" and connected(org):
+    if settings.get(org, "email_provider") == "microsoft" and connected(org) and connected_method(org) == method(org):
         access_token(org, force=True)
 
 

@@ -20,7 +20,7 @@ SECTIONS = {
                 "company_vat", "company_phone", "company_email", "contract_terms"),
     "getaround": ("getaround_token", "getaround_webhook_secret"),
     "assistant": ("anthropic_api_key", "assistant_mode", "assistant_instructions"),
-    "email": ("email_provider", "ms_client_id", "ms_tenant", "smtp_host", "smtp_port", "smtp_security", "smtp_user", "smtp_password", "email_from",
+    "email": ("email_provider", "ms_client_id", "ms_tenant", "ms_method", "smtp_host", "smtp_port", "smtp_security", "smtp_user", "smtp_password", "email_from",
               "email_from_name"),
     "sms": ("sms_provider", "twilio_sid", "twilio_token", "twilio_from", "sms_http_url", "sms_http_token"),
     "facturation": ("invoice_provider", "pennylane_token", "invoice_prefix"),
@@ -35,7 +35,8 @@ def settings_page(request: Request, user: User = Depends(admin), db: Session = D
     values = {k: settings.get(org, k) for k in settings.DEFAULTS}
     secrets_set = {k: settings.has(org, k) for k in settings.SECRET_KEYS}
     users = db.query(User).filter_by(org_id=org.id).order_by(User.id).all()
-    return render(request, "settings.html", s=values, smtp_security=email.SECURITY, ms_connected=microsoft.connected(org), secret=secrets_set, users=users, org=org,
+    return render(request, "settings.html", s=values, smtp_security=email.SECURITY, ms_connected=microsoft.connected(org),
+                  ms_reconnect=microsoft.connected(org) and microsoft.connected_method(org) != microsoft.method(org), secret=secrets_set, users=users, org=org,
                   webhook_url=f"{config.BASE_URL}/webhooks/getaround/{org.webhook_key}",
                   fines_inbox=fines.inbox(org.id), new_token=request.session.pop("new_token", None))
 

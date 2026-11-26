@@ -86,6 +86,10 @@
       <div class="field"><label for="ms_tenant">Type de compte</label><select id="ms_tenant" name="ms_tenant">
         <option value="consumers" {{ 'selected' if s.ms_tenant == 'consumers' }}>Personnel — @outlook.fr, @hotmail.fr, @live.fr</option>
         <option value="organizations" {{ 'selected' if s.ms_tenant == 'organizations' }}>Professionnel — Microsoft 365</option></select></div>
+      <div class="field"><label for="ms_method">Méthode d'envoi</label><select id="ms_method" name="ms_method">
+        <option value="graph" {{ 'selected' if s.ms_method != 'smtp' }}>API Microsoft Graph (recommandé)</option>
+        <option value="smtp" {{ 'selected' if s.ms_method == 'smtp' }}>SMTP (souvent bloqué par Microsoft sur Outlook.com)</option></select>
+        <div class="help">Après un changement de méthode, cliquez sur « Reconnecter ». Avec Graph, les e-mails apparaissent aussi dans vos Éléments envoyés.</div></div>
     </div>
 
     <h3 style="font-size:.95rem;margin:10px 0 8px">Avec un serveur SMTP</h3>
@@ -104,9 +108,10 @@
     <p class="help" style="margin-top:-6px">Les réponses de vos clients arrivent sur l'e-mail de la société (section Société), s'il est différent.</p>
     <button class="btn primary">Enregistrer</button>
   </form>
-  <div class="note {{ 'warn' if s.ms_error }}" style="margin-top:16px">
+  <div class="note {{ 'warn' if s.ms_error or ms_reconnect }}" style="margin-top:16px">
     <b>Compte Microsoft :</b>
     {% if ms_connected %}<span class="badge green">connecté</span> {{ s.ms_account }}{% else %}<span class="badge gray">non connecté</span>{% endif %}
+    {% if ms_reconnect %}<br><span class="badge amber">reconnexion nécessaire</span> La méthode d'envoi a changé : cliquez sur « Reconnecter » pour accorder l'autorisation correspondante.{% endif %}
     {% if s.ms_error %}<br>{{ s.ms_error }}{% endif %}
     <div class="actions" style="margin-top:8px">
       <form method="post" action="/reglages-microsoft/connexion"><button class="btn small primary" {{ 'disabled' if not s.ms_client_id }}>{{ "Reconnecter" if ms_connected else "Se connecter avec Microsoft" }}</button></form>
@@ -120,7 +125,7 @@
       <li><b>Applications → Inscriptions d'applications → Nouvelle inscription</b>. Nom : <i>SharedFleet</i>. Types de comptes : <b>Comptes Microsoft personnels uniquement</b> (ou « tout annuaire et comptes personnels »). Pas d'URI de redirection.</li>
       <li>Dans l'application créée, onglet <b>Authentification</b> → « Autoriser les flux de clients publics » : <b>Oui</b> → Enregistrer.</li>
       <li>Onglet <b>Vue d'ensemble</b> : copiez l'<b>ID d'application (client)</b> et collez-le ci-dessus, puis Enregistrer.</li>
-      <li>Cliquez sur <b>Se connecter avec Microsoft</b>, saisissez le code affiché sur la page Microsoft et acceptez l'autorisation « Envoyer des e-mails ».</li>
+      <li>Cliquez sur <b>Se connecter avec Microsoft</b>, saisissez le code affiché sur la page Microsoft et acceptez l'autorisation « Envoyer des e-mails en votre nom » (Mail.Send).</li>
     </ol>
   </details>
   <form method="post" action="/reglages-email-test" class="inline" style="margin-top:14px;max-width:460px">

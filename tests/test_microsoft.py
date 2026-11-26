@@ -22,13 +22,22 @@ class FakeMicrosoft:
 
     def __init__(self):
         self.calls, self.approved, self.refresh_ok, self.n = [], False, True, 0
+        self.sent, self.graph_status, self.scopes = [], 202, []
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
+        if request.url.host == "graph.microsoft.com":  # API Graph : envoi d'e-mail
+            assert request.url.path == "/v1.0/me/sendMail" and request.headers["authorization"].startswith("Bearer AT")
+            if self.graph_status != 202:
+                return httpx.Response(self.graph_status, json={"error": {"code": "ErrorAccessDenied", "message": "Access is denied."}})
+            self.sent.append(json.loads(request.content))
+            return httpx.Response(202)
         form = {k: v[0] for k, v in parse_qs(request.content.decode()).items()}
         self.calls.append((request.url.path, form))
+        if "scope" in form:
+            self.scopes.append(form["scope"])
         assert form["client_id"] == "client-123"
         if request.url.path == "/consumers/oauth2/v2.0/devicecode":
-            assert "https://outlook.office.com/SMTP.Send" in form["scope"] and "offline_access" in form["scope"]
+            assert "offline_access" in form["scope"]
             return httpx.Response(200, json={"device_code": "DEV", "user_code": "ABCD-EFGH", "interval": 5, "expires_in": 900,
                                              "verification_uri": "https://microsoft.com/devicelogin"})
         if form["grant_type"] == "urn:ietf:params:oauth:grant-type:device_code":
@@ -146,7 +155,13 @@ class XOAuthServer:
 
 
 @pytest.fixture
-def smtp_server(monkeypatch):
+def smtp_server(monkeypatch, client, ms):
+    client.post("/reglages/email", data={"email_provider": "microsoft", "ms_client_id": "client-123", "ms_tenant": "consumers",
+                                         "ms_method": "smtp"})
+    yield from _smtp_server(monkeypatch)
+
+
+def _smtp_server(monkeypatch):
     handler = XOAuthServer()
     import socket
     with socket.socket() as sock:
@@ -196,3 +211,81 @@ def test_rejected_token_gives_clear_error(client, fleet, db, ms, smtp_server):
     with pytest.raises(email.EmailError, match="Microsoft a refusé l'identification"):
         email.send(org, msg)
     assert smtp_server.messages == []
+
+
+
+# --- envoi via l'API Microsoft Graph (méthode par défaut) ---
+def test_graph_is_the_default_and_requests_mail_send(client, db, ms):
+    connect(client, ms)
+    assert "https://graph.microsoft.com/Mail.Send" in ms.scopes[0] and "SMTP.Send" not in ms.scopes[0]
+
+
+def test_access_code_email_goes_through_graph(client, fleet, db, ms, monkeypatch):
+    from .conftest import photo
+    client.post("/reglages-logo", files={"logo": ("logo.png", photo()[1], "image/jpeg")})
+    client.post("/reglages/societe", data={"company_name": "Utilitaires Test", "company_email": "contact@utilitaires.fr"})
+    connect(client, ms)
+    monkeypatch.setattr(svc, "send_sms", lambda *a: True)
+    vehicle, customer = fleet
+    start = now() + timedelta(minutes=10)
+    client.post("/locations", data={"vehicle_id": vehicle.id, "customer_id": customer.id, "starts_at": start.isoformat(),
+                                    "ends_at": (start + timedelta(hours=5)).isoformat()})
+    assert scheduler.send_due_codes() == 1
+    payload = ms.sent[0]
+    message = payload["message"]
+    assert payload["saveToSentItems"] is True
+    assert message["toRecipients"] == [{"emailAddress": {"address": "ines@lumen.fr", "name": "Inès Moreau"}}]
+    assert message["replyTo"] == [{"emailAddress": {"address": "contact@utilitaires.fr"}}]
+    assert message["body"]["contentType"] == "HTML" and db.query(Booking).one().access_code in message["body"]["content"]
+    assert 'src="cid:logo"' in message["body"]["content"]
+    logo = message["attachments"][0]
+    assert logo["isInline"] is True and logo["contentId"] == "logo" and base64.b64decode(logo["contentBytes"])[:3] == b"\xff\xd8\xff"
+    assert vehicle.lock_code not in message["body"]["content"]
+    assert svc.code_history(db, db.query(Booking).one())[0]["ok"]
+
+
+def test_old_smtp_connection_asks_to_reconnect(client, db, ms):
+    """Compte connecté avant Graph (droit SMTP) : on demande de se reconnecter au lieu d'échouer sans explication."""
+    connect(client, ms)
+    org = db.query(Organization).one()
+    settings.update(org, {"ms_connected_method": ""})
+    db.commit()
+    microsoft._access.clear()
+    assert "reconnexion nécessaire" in client.get("/reglages").text
+    with pytest.raises(email.EmailError, match="Reconnecter"):
+        email.send(org, email.build(org, "moi@example.org", "", "Test", "texte"))
+    client.post("/reglages-microsoft/connexion")
+    ms.approved = True
+    client.post("/reglages-microsoft/verifier")
+    db.refresh(org)
+    assert "reconnexion nécessaire" not in client.get("/reglages").text
+    email.send(org, email.build(org, "moi@example.org", "", "Test", "texte"))
+    assert ms.sent[-1]["message"]["body"] == {"contentType": "Text", "content": "texte\n"}
+
+
+def test_graph_permission_error_is_explained(client, db, ms):
+    connect(client, ms)
+    ms.graph_status = 403
+    org = db.query(Organization).one()
+    with pytest.raises(email.EmailError, match="Envoyer des e-mails"):
+        email.send(org, email.build(org, "moi@example.org", "", "Test", "texte"))
+
+
+def test_smtp_block_message_points_to_graph(client, fleet, db, ms, monkeypatch):
+    client.post("/reglages/email", data={"email_provider": "microsoft", "ms_client_id": "client-123", "ms_tenant": "consumers",
+                                         "ms_method": "smtp"})
+    connect(client, ms)
+
+    class Blocked:
+        def __init__(self, *a, **kw): pass
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def ehlo(self): pass
+        def starttls(self, **kw): pass
+        def auth(self, *a):
+            raise smtplib.SMTPAuthenticationError(535, b"5.7.139 Authentication unsuccessful, SmtpClientAuthentication is disabled for the Mailbox.")
+
+    monkeypatch.setattr(smtplib, "SMTP", Blocked)
+    org = db.query(Organization).one()
+    with pytest.raises(email.EmailError, match="API Microsoft Graph"):
+        email.send(org, email.build(org, "moi@example.org", "", "Test", "texte"))
