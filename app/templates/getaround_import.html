@@ -1,10 +1,13 @@
 {% extends "base.html" %}
-{% block title %}Import des locations Getaround · SharedFleet{% endblock %}
+{% block title %}{{ "Import des locations Getaround" if kind == "getaround" else "Import des locations directes" }} · SharedFleet{% endblock %}
 {% block content %}
 <div class="head">
-  <div><h1>Import manuel des locations Getaround</h1>
+  {% if kind == "getaround" %}<div><h1>Import manuel des locations Getaround</h1>
     <div class="sub">Collez les locations relevées dans l'espace propriétaire Getaround. Réimporter le même tableau ne crée jamais de doublon.</div></div>
   <a class="btn" href="/locations?f=getaround">Voir les locations Getaround</a>
+  {% else %}<div><h1>Import des locations directes déjà réalisées</h1>
+    <div class="sub">Reprise d'historique : aucun code d'accès, aucun SMS ni e-mail au client, calendrier Getaround inchangé. Réimporter le même tableau ne crée jamais de doublon (clé : n° de contrat).</div></div>
+  <a class="btn" href="/locations?f=direct">Voir les locations directes</a>{% endif %}
 </div>
 
 {% if error %}<div class="flash error" role="alert">{{ error }}</div>{% endif %}
@@ -16,14 +19,14 @@
     {% for key, (label, color) in actions.items() %}<span class="badge {{ color }}">{{ label }} : {{ counts[key] }}</span>{% endfor %}
   </div>
   <div class="scroll"><table>
-    <thead><tr><th>#</th><th>Getaround</th><th>Véhicule</th><th>Début</th><th>Fin</th><th class="r">Montant</th><th>Action</th><th>Détail</th></tr></thead>
+    <thead><tr><th>#</th><th>{{ "Getaround" if kind == "getaround" else "Contrat" }}</th><th>Véhicule</th><th>Début</th><th>Fin</th><th class="r">Montant</th><th>Action</th><th>Détail</th></tr></thead>
     <tbody>{% for r in rows %}
       <tr>
         <td class="num">{{ r.index }}</td>
         <td>{% if r.booking and r.booking.id %}<a href="/locations/{{ r.booking.id }}">{{ r.getaround_id }}</a>{% else %}{{ r.getaround_id or "—" }}{% endif %}</td>
         <td>{{ r.vehicle.name if r.vehicle else (r.plate or "—") }}{% if r.vehicle %}<br><small class="muted">{{ r.vehicle.plate }}</small>{% endif %}</td>
         <td>{{ r.starts_at|dt if r.starts_at else "—" }}</td><td>{{ r.ends_at|dt if r.ends_at else "—" }}</td>
-        <td class="r num">{{ r.price|eur if r.price is not none else "—" }}</td>
+        <td class="r num {{ 'neg' if r.price is not none and r.price < 0 }}">{{ r.price|eur if r.price is not none else "—" }}{% if r.deductions %}<br><small class="muted">retenues {{ r.deductions|eur }}</small>{% endif %}</td>
         <td><span class="badge {{ r.label[1] }}">{{ r.label[0] }}</span></td>
         <td><small>{{ r.reasons|join(" · ") }}</small>{% if r.renter %}<br><small class="muted">{{ r.renter }}{% if r.km is not none %} · {{ r.km }} km{% endif %}</small>{% endif %}</td>
       </tr>{% endfor %}
@@ -32,13 +35,14 @@
 </div>
 {% endif %}
 
-<form class="card" method="post" action="/locations/import-getaround">
+<form class="card" method="post" action="{{ url }}">
   <div class="field">
     <label for="payload">Tableau JSON des locations</label>
     <textarea id="payload" name="payload" spellcheck="false" style="min-height:280px;font-family:ui-monospace,Menlo,monospace;font-size:.86rem" placeholder="{{ example }}">{{ text }}</textarea>
-    <div class="help">Heures de Paris, au format <span class="mono">2026-11-27T12:00</span>. Statut : <span class="mono">confirmee</span> ou <span class="mono">annulee</span>.
-      Champs facultatifs : <span class="mono">km</span>, <span class="mono">locataire</span>, <span class="mono">assurance</span>
+    {% if kind == "getaround" %}<div class="help">Heures de Paris, au format <span class="mono">2026-11-27T12:00</span>. Statut : <span class="mono">confirmee</span> ou <span class="mono">annulee</span>.
+      <span class="mono">montant</span> = revenu net versé (peut être négatif). Champs facultatifs : <span class="mono">retenues</span> (carburant, frais retenus par Getaround), <span class="mono">km</span>, <span class="mono">locataire</span>, <span class="mono">assurance</span>
       ({{ "ajouté au revenu : option « inclure l'assurance » cochée" if with_insurance else "ignoré : option « inclure l'assurance » décochée" }}).</div>
+    {% else %}<div class="help">Heures de Paris (<span class="mono">2026-11-03T08:00</span>). Obligatoires : <span class="mono">contrat_ref</span>, <span class="mono">plaque</span>, <span class="mono">client</span> (raison sociale, ou prénom et nom d'un client existant), <span class="mono">debut</span>, <span class="mono">fin</span>, <span class="mono">prix_ht</span>. Facultatifs : <span class="mono">tva</span> (20 par défaut), <span class="mono">km_inclus</span> et <span class="mono">depot</span> (valeurs du véhicule par défaut).</div>{% endif %}
   </div>
   <div class="actions">
     <button class="btn" name="action" value="preview">Prévisualiser</button>
@@ -48,6 +52,6 @@
 
 <details class="card"><summary style="cursor:pointer"><b>Format attendu</b></summary>
 <pre class="mono" style="display:block;white-space:pre;overflow-x:auto;padding:12px;margin-top:10px">{{ example }}</pre>
-<p class="muted" style="margin:0">Ce sont des locations Getaround : aucun client, contrat, code d'accès, blocage de calendrier ni facture n'est créé.</p>
+<p class="muted" style="margin:0">{% if kind == "getaround" %}Ce sont des locations Getaround : aucun client, contrat, code d'accès, blocage de calendrier ni facture n'est créé.{% else %}Locations directes en reprise d'historique : contrat marqué « Signé hors application », aucun envoi au client, facture à créer à la main si besoin.{% endif %}</p>
 </details>
 {% endblock %}

@@ -80,8 +80,8 @@ def send_access_code(db: Session, org: Organization, booking: Booking, channels:
     from . import email
 
     c = booking.customer
-    if not c:
-        return {}
+    if not c or booking.historical or booking.source != "direct":
+        return {}  # reprise d'historique / location Getaround : jamais de code envoyé
     if channels is None:
         channels = tuple(ch for ch in ("sms", "email") if settings.get(org, f"code_by_{ch}"))
     if not booking.access_code:
@@ -123,6 +123,7 @@ def due_for_code(db: Session) -> list[Booking]:
     t = now()
     return db.query(Booking).filter(
         Booking.source == "direct", Booking.status == "confirmed", Booking.code_sent_at.is_(None),
+        Booking.historical.is_(False), Booking.access_code.is_not(None),
         Booking.starts_at <= t + timedelta(minutes=config.SMS_LEAD_MINUTES), Booking.ends_at > t).all()
 
 
@@ -160,3 +161,20 @@ def save_inspection(db: Session, booking: Booking, kind: str, mileage: int | Non
     booking.status = "in_progress" if kind == "checkin" else "completed"
     db.commit()
     return inspection
+
+
+PAST_START_GRACE_MINUTES = 15  # un départ « à l'instant » reste possible sans cocher la reprise d'historique
+
+
+def starts_in_past(start: datetime) -> bool:
+    return start < now() - timedelta(minutes=PAST_START_GRACE_MINUTES)
+
+
+def mark_historical(booking: Booking, contract_ref: str) -> None:
+    """Passe une location directe en reprise d'historique, sans rien envoyer à personne.
+
+    Le code d'accès est retiré : plus aucun envoi automatique possible et la page client n'est plus accessible.
+    """
+    booking.historical = True
+    booking.contract_ref = contract_ref.strip()[:60]
+    booking.access_code = None

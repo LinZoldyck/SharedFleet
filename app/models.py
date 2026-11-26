@@ -118,6 +118,12 @@ class Booking(Base):
     accepted_by: Mapped[str] = mapped_column(String(200), default="")
     accepted_ip: Mapped[str] = mapped_column(String(60), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now)
+    # Reprise d'historique : location saisie après coup (contrat signé hors application). Jamais de code d'accès,
+    # de SMS / e-mail, de blocage du calendrier Getaround ni de demande d'état des lieux.
+    historical: Mapped[bool] = mapped_column(default=False)
+    contract_ref: Mapped[str] = mapped_column(String(60), default="")  # n° du contrat d'origine (ex. SAH-2026-001)
+    # Getaround : retenues déduites par Getaround (carburant, frais…). Revenu brut = price_ht (net) + deductions.
+    deductions: Mapped[Optional[float]] = mapped_column(Float)
 
     vehicle: Mapped[Vehicle] = relationship()
     customer: Mapped[Optional[Customer]] = relationship()
@@ -126,6 +132,26 @@ class Booking(Base):
 
     def inspection(self, kind: str) -> Optional["Inspection"]:
         return next((i for i in self.inspections if i.kind == kind), None)
+
+    @property
+    def effective_status(self) -> str:
+        """Statut affiché : annulée si annulée, sinon déduit des dates.
+
+        Un état des lieux peut faire avancer le statut plus tôt (retour anticipé = terminée), jamais le faire reculer.
+        Le statut stocké n'est pas réécrit : le parcours client s'en sert (retour en retard après la fin prévue).
+        """
+        if self.status == "cancelled":
+            return "cancelled"
+        t = now()
+        by_dates = "completed" if self.ends_at < t else "in_progress" if self.starts_at <= t else "confirmed"
+        order = ("confirmed", "in_progress", "completed")
+        stored = self.status if self.status in order else "confirmed"
+        return max(by_dates, stored, key=order.index)
+
+    @property
+    def gross_amount(self) -> float | None:
+        """Getaround : revenu avant retenues (si les retenues sont connues)."""
+        return round(self.price_ht + self.deductions, 2) if self.deductions else None
 
     @property
     def imported_renter(self) -> str:

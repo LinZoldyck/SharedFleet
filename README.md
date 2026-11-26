@@ -109,6 +109,21 @@ Les e-mails partent de votre adresse Outlook via l'**API Microsoft Graph** (HTTP
 reste disponible dans les réglages ; après tout changement de méthode, cliquez sur « Reconnecter ». La connexion est renouvelée
 automatiquement chaque jour ; si Microsoft la révoque, les réglages l'indiquent et il suffit de se reconnecter.
 
+### Reprendre l'historique
+
+- **Location directe déjà réalisée** : dans « Nouvelle location directe », cochez « Location déjà réalisée / reprise
+  d'historique » (obligatoire si le départ est passé). Aucun code d'accès, aucun SMS ni e-mail, calendrier Getaround
+  inchangé, contrat marqué « Signé hors application » avec le n° du contrat d'origine.
+- **Location directe déjà saisie** : sur sa fiche, un administrateur peut la « Passer en reprise d'historique » :
+  le code d'accès est retiré, rien n'est envoyé.
+- **En masse** : `/locations/import-directes` (JSON : `contrat_ref`, `plaque`, `client`, `debut`, `fin`, `prix_ht`,
+  `tva`, `km_inclus`, `depot`). Clé : le n° de contrat ; les clients doivent exister.
+- **Locations Getaround** : `/locations/import-getaround`. `montant` est le revenu net versé et peut être négatif
+  (carburant retenu…) ; `retenues` (facultatif) garde le détail brut / retenues / net.
+
+Au démarrage, l'application ajoute d'elle-même à la base les colonnes apparues dans une nouvelle version
+(migration légère, sans perte de données).
+
 ### Dossier des contraventions
 
 Déposez les avis (PDF, JPG, PNG) dans `data/org_<n>/contraventions/a_traiter` — le chemin exact est affiché

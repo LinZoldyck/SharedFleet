@@ -20,9 +20,11 @@ ORIGIN = {"Origin": "http://testserver"}
 
 @pytest.fixture(autouse=True)
 def fresh_db():
+    from app.services import getaround
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
     security._attempts.clear()
+    getaround._calls.clear()  # le limiteur d'appels Getaround compte sur tout le processus
     yield
 
 

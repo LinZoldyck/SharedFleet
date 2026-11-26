@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..models import Booking, Customer, Organization, User, Vehicle
-from ..security import current_user, manager
+from ..security import admin, current_user, manager
 from ..services import bookings as svc
 from ..services import email, getaround, invoicing, media, pdf
 from ..timeutil import now
@@ -36,8 +36,8 @@ def _planning(db: Session, org_id: int, vehicles: list[Vehicle]) -> dict:
 @router.get("/locations")
 def list_bookings(request: Request, f: str = "actives", user: User = Depends(current_user), db: Session = Depends(get_db)):
     q = db.query(Booking).filter_by(org_id=user.org_id)
-    if f == "actives":
-        q = q.filter(Booking.status.in_(svc.ACTIVE)).order_by(Booking.starts_at)
+    if f == "actives":  # d'après les dates : une location passée n'est plus « à venir », même sans état des lieux
+        q = q.filter(Booking.status != "cancelled", Booking.ends_at >= now()).order_by(Booking.starts_at)
     elif f in ("direct", "getaround"):
         q = q.filter_by(source=f).order_by(Booking.starts_at.desc())
     else:
@@ -58,11 +58,18 @@ def new_booking(request: Request, customer_id: int = 0, user: User = Depends(man
 @router.post("/locations")
 def create_booking(request: Request, vehicle_id: int = Form(), customer_id: int = Form(), starts_at: str = Form(),
                    ends_at: str = Form(), price_ht: str = Form(""), vat_rate: str = Form("20"), notes: str = Form(""),
+                   deposit: str = Form(""), historical: str = Form(""), contract_ref: str = Form(""),
                    user: User = Depends(manager), db: Session = Depends(get_db)):
     vehicle, customer = owned(db, Vehicle, vehicle_id, user), owned(db, Customer, customer_id, user)
     start, end = to_datetime(starts_at), to_datetime(ends_at)
+    is_history = historical == "on"
     if not start or not end or end <= start:
         flash(request, "Les dates sont invalides : le retour doit être après le départ.", "error")
+        return redirect("/locations/nouvelle")
+    if svc.starts_in_past(start) and not is_history:
+        # Sinon le code d'accès partirait immédiatement pour une location déjà réalisée
+        flash(request, "Le départ est dans le passé. S'il s'agit d'une location déjà réalisée, cochez « Location déjà "
+                       "réalisée / reprise d'historique » : aucun code ne sera envoyé au client.", "error")
         return redirect("/locations/nouvelle")
     clash = svc.conflicts(db, user.org_id, vehicle.id, start, end)
     if clash:
@@ -71,18 +78,64 @@ def create_booking(request: Request, vehicle_id: int = Form(), customer_id: int 
                        f"au {c.ends_at:%d/%m %Hh%M}).", "error")
         return redirect("/locations/nouvelle")
     b = Booking(org_id=user.org_id, vehicle_id=vehicle.id, customer_id=customer.id, source="direct", starts_at=start,
-                ends_at=end, vat_rate=to_float(vat_rate, 20), notes=notes.strip(), deposit=vehicle.deposit)
+                ends_at=end, vat_rate=to_float(vat_rate, 20), notes=notes.strip(),
+                deposit=to_float(deposit, vehicle.deposit) if deposit.strip() else vehicle.deposit)
     b.vehicle = vehicle
     b.price_ht = to_float(price_ht) if price_ht.strip() else round(vehicle.daily_rate * b.days, 2)
     b.km_included = vehicle.km_included * b.days
-    b.access_code = svc.new_access_code(db)
+    if is_history:
+        svc.mark_historical(b, contract_ref)
+    else:
+        b.access_code = svc.new_access_code(db)
     db.add(b)
     db.commit()
+    if is_history:
+        flash(request, f"Location {b.reference} enregistrée en reprise d'historique : aucun code d'accès, aucun SMS ni "
+                       "e-mail, calendrier Getaround non modifié.")
+        return redirect(f"/locations/{b.id}")
     flash(request, f"Location {b.reference} créée. Le contrat est prêt ; le code d'accès sera envoyé au client 30 minutes avant le départ.")
-    error = getaround.block_calendar(user.org, b)
-    if error:
-        flash(request, f"Le calendrier Getaround n'a pas pu être bloqué : {error} Bloquez le créneau à la main.", "error")
+    skipped = getaround.calendar_skip_reason(user.org, b)
+    if skipped and skipped != "option désactivée dans les réglages":
+        flash(request, f"Créneau NON bloqué sur Getaround : {skipped}. Bloquez-le à la main dans l'espace propriétaire "
+                       "Getaround pour éviter une double réservation.", "error")
+    else:
+        error = getaround.block_calendar(user.org, b)
+        if error:
+            flash(request, f"Le calendrier Getaround n'a pas pu être bloqué : {error} Bloquez le créneau à la main.", "error")
+        elif not skipped:
+            flash(request, "Créneau bloqué sur le calendrier Getaround.")
     return redirect(f"/locations/{b.id}")
+
+
+@router.post("/locations/{bid}/modifier")
+def update_booking(bid: int, request: Request, deposit: str = Form(""), contract_ref: str = Form(""),
+                   user: User = Depends(manager), db: Session = Depends(get_db)):
+    """Modifications sans effet sur le client : dépôt de garantie, n° de contrat d'origine."""
+    b = owned(db, Booking, bid, user)
+    if b.source != "direct":
+        return redirect(f"/locations/{bid}")
+    if deposit.strip():
+        b.deposit = max(0.0, to_float(deposit, b.deposit))
+    if b.historical:
+        b.contract_ref = contract_ref.strip()[:60]
+    db.commit()
+    flash(request, "Location mise à jour.")
+    return redirect(f"/locations/{bid}")
+
+
+@router.post("/locations/{bid}/historique")
+def make_historical(bid: int, request: Request, contract_ref: str = Form(""), user: User = Depends(admin),
+                    db: Session = Depends(get_db)):
+    """Action administrateur : passer une location directe existante en reprise d'historique, sans rien envoyer."""
+    b = owned(db, Booking, bid, user)
+    if b.source != "direct":
+        flash(request, "Seule une location directe peut être passée en reprise d'historique.", "error")
+        return redirect(f"/locations/{bid}")
+    svc.mark_historical(b, contract_ref)
+    db.commit()
+    flash(request, f"{b.reference} passée en reprise d'historique"
+                   + (f" (contrat {b.contract_ref})" if b.contract_ref else "") + " : plus aucun envoi de code possible.")
+    return redirect(f"/locations/{bid}")
 
 
 @router.get("/locations/{bid}")
@@ -107,6 +160,9 @@ CHANNEL_LABELS = {"sms": "SMS", "email": "e-mail"}
 def send_code(bid: int, request: Request, channel: str = Form("auto"), user: User = Depends(manager),
               db: Session = Depends(get_db)):
     b = owned(db, Booking, bid, user)
+    if b.historical:
+        flash(request, "Reprise d'historique : aucun code d'accès n'est envoyé pour cette location.", "error")
+        return redirect(f"/locations/{bid}")
     results = svc.send_access_code(db, user.org, b, channels=(channel,) if channel in CHANNEL_LABELS else None)
     if not results:
         flash(request, "Aucun envoi possible : ajoutez un téléphone ou un e-mail au client, et activez un canal dans "
@@ -128,7 +184,7 @@ def cancel(bid: int, request: Request, user: User = Depends(manager), db: Sessio
         return redirect(f"/locations/{bid}")
     b.status = "cancelled"
     db.commit()
-    error = getaround.block_calendar(user.org, b, release=True)
+    error = None if b.historical else getaround.block_calendar(user.org, b, release=True)
     flash(request, "Location annulée." + (f" Pensez à libérer le créneau sur Getaround ({error})." if error else ""))
     return redirect("/locations")
 

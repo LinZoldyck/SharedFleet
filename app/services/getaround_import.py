@@ -38,12 +38,14 @@ class Row:
     starts_at: datetime | None = None
     ends_at: datetime | None = None
     price: float | None = None
+    deductions: float | None = None
     km: int | None = None
     renter: str = ""
     cancelled: bool = False
     action: str = "error"
     reasons: list[str] = field(default_factory=list)
     booking: Booking | None = None
+    values: dict = field(default_factory=dict)  # import des locations directes : champs à écrire
 
     @property
     def label(self):
@@ -54,7 +56,7 @@ def _plain(text: str) -> str:
     return unicodedata.normalize("NFD", str(text)).encode("ascii", "ignore").decode().strip().lower()
 
 
-def _number(value, name: str, row: Row, integer: bool = False):
+def _number(value, name: str, row: Row, integer: bool = False, negative: bool = False):
     if value is None or value == "":
         return None
     if isinstance(value, bool):
@@ -65,7 +67,7 @@ def _number(value, name: str, row: Row, integer: bool = False):
     except ValueError:
         row.reasons.append(f"« {name} » doit être un nombre (reçu : {value!r}).")
         return None
-    if number < 0:
+    if number < 0 and not negative:
         row.reasons.append(f"« {name} » ne peut pas être négatif.")
         return None
     if integer and number != int(number):
@@ -141,7 +143,9 @@ def plan(db: Session, org: Organization, text: str) -> list[Row]:
             row.reasons.append(f"« statut » doit valoir \"confirmee\" ou \"annulee\" (reçu : {item.get('statut')!r}).")
         row.cancelled = statut == "annulee"
         row.starts_at, row.ends_at = _date(item.get("debut"), "debut", row), _date(item.get("fin"), "fin", row)
-        amount = _number(item.get("montant"), "montant", row)
+        # Montant = revenu NET réellement versé par Getaround : il peut être nul ou négatif (carburant retenu…)
+        amount = _number(item.get("montant"), "montant", row, negative=True)
+        row.deductions = _number(item.get("retenues"), "retenues", row)
         insurance = _number(item.get("assurance"), "assurance", row)
         row.km = _number(item.get("km"), "km", row, integer=True)
         row.renter = str(item.get("locataire") or "").strip()[:200]
@@ -182,6 +186,8 @@ def _decide(row: Row) -> None:
         changes.append(f"dates : {b.starts_at:%d/%m %Hh%M}–{b.ends_at:%d/%m %Hh%M} → {row.starts_at:%d/%m %Hh%M}–{row.ends_at:%d/%m %Hh%M}")
     if round(b.price_ht, 2) != row.price:
         changes.append(f"montant : {b.price_ht:.2f} € → {row.price:.2f} €")
+    if row.deductions is not None and b.deductions != row.deductions:
+        changes.append(f"retenues : {b.deductions or 0:.2f} € → {row.deductions:.2f} €")
     if b.notes != _notes(b.notes, row.renter or b.imported_renter, row.km if row.km is not None else b.imported_km):
         changes.append("locataire / km")
     if b.status == "cancelled":
@@ -206,6 +212,8 @@ def apply(db: Session, org: Organization, rows: list[Row]) -> None:
             db.add(b)
         b.vehicle_id = row.vehicle.id
         b.starts_at, b.ends_at, b.price_ht = row.starts_at, row.ends_at, row.price
+        if row.deductions is not None:  # absent au réimport : on garde la valeur connue
+            b.deductions = row.deductions
         b.notes = _notes(b.notes, row.renter or b.imported_renter, row.km if row.km is not None else b.imported_km)
         b.status = status_for(row.starts_at, row.ends_at)  # une ligne « confirmee » réactive une location annulée
     db.commit()
@@ -225,6 +233,7 @@ EXAMPLE = """[
     "debut": "2026-11-27T12:00",
     "fin": "2026-11-28T22:00",
     "montant": 85.40,
+    "retenues": 0,
     "km": 120,
     "locataire": "Wesilé T.",
     "statut": "confirmee"

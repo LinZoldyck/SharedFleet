@@ -155,3 +155,4 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
   td, th { padding: 10px 12px; }
 }
 .grid { margin-bottom: 16px; } .grid > .card { margin-bottom: 0; } .g4 { align-items: stretch; }
+.neg, .neg b { color: var(--red); }

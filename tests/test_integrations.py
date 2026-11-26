@@ -80,7 +80,7 @@ def test_secrets_are_encrypted_at_rest(connected, db):
 def test_sync_imports_rentals_drivers_and_messages(connected, db):
     org, _ = connected
     stats = getaround.sync_all(db, org)
-    assert stats == {"cars": 1, "rentals": 1, "messages": 1, "ignored": 0}
+    assert stats == {"cars": 1, "rentals": 1, "messages": 1, "ignored": 0, "skipped": 0}
     b = db.query(Booking).filter_by(source="getaround").one()
     assert b.reference == "GA-77" and b.price_ht == 120.50 and b.status == "in_progress"
     assert b.vehicle.getaround_car_id == 9  # rattaché par la plaque AB-123-CD
@@ -235,7 +235,7 @@ def test_fps_is_reinvoiced_with_admin_fee(client, fleet, db):
     vehicle, customer = fleet
     start = now() - timedelta(days=1)
     client.post("/locations", data={"vehicle_id": vehicle.id, "customer_id": customer.id, "starts_at": start.isoformat(),
-                                    "ends_at": (start + timedelta(hours=6)).isoformat()})
+                                    "ends_at": (start + timedelta(hours=6)).isoformat(), "historical": "on"})
     b = db.query(Booking).one()
     db.add(Fine(org_id=b.org_id, file_path="", file_hash="h", kind="fps", notice_number="555", plate=vehicle.plate, amount=35,
                 offense_at=start + timedelta(hours=1), vehicle_id=vehicle.id, booking_id=b.id, status="matched"))

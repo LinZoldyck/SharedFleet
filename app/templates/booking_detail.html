@@ -4,11 +4,21 @@
 {% macro inspection_card(kind, title) %}
 {% set i = b.inspection(kind) %}
 <div class="card">
-  <h2>{{ title }} {% if i %}<span class="badge green">fait le {{ i.created_at|dt }}</span>{% else %}<span class="badge gray">à faire</span>{% endif %}</h2>
+  <h2>{{ title }} {% if i %}<span class="badge green">fait le {{ i.created_at|dt }}</span>{% elif b.historical %}<span class="badge gray">non concerné</span>{% elif b.source == "direct" %}<span class="badge gray">à faire</span>{% endif %}</h2>
   {% if i %}
   <dl class="kv" style="margin-bottom:12px"><dt>Kilométrage</dt><dd class="num">{{ i.mileage if i.mileage is not none else "—" }} km</dd>
     <dt>Carburant</dt><dd>{{ i.fuel_level if i.fuel_level is not none else "—" }} %</dd><dt>Observations</dt><dd>{{ i.notes or "Aucune réserve" }}</dd></dl>
   <div class="photos">{% for ph in i.photos %}<a href="/media/{{ ph.path }}" target="_blank"><img src="/media/{{ ph.path }}" loading="lazy" alt="Photo {{ 'extérieur' if ph.category == 'exterior' else 'intérieur' }}"></a>{% endfor %}</div>
+  {% elif b.historical %}
+  <p class="muted">Reprise d'historique : l'état des lieux a été fait hors application (voir le contrat d'origine{{ " " ~ b.contract_ref if b.contract_ref }}). Vous pouvez tout de même joindre des photos :</p>
+  {% if user.role != "viewer" %}<details><summary class="btn small">Ajouter un état des lieux</summary>
+    <form method="post" action="/locations/{{ b.id }}/etat-des-lieux/{{ kind }}" enctype="multipart/form-data" style="margin-top:12px">
+      <div class="grid g2">{{ field("mileage", "Kilométrage", type="number", attrs='min="0"') }}{{ field("fuel_level", "Carburant (%)", type="number", attrs='min="0" max="100"') }}</div>
+      <div class="field"><label>Photos extérieur</label><input type="file" name="exterior" accept="image/*" multiple></div>
+      <div class="field"><label>Photos intérieur</label><input type="file" name="interior" accept="image/*" multiple></div>
+      <div class="field"><label>Observations</label><textarea name="notes"></textarea></div>
+      <button class="btn primary">Enregistrer</button>
+    </form></details>{% endif %}
   {% elif b.source == "direct" and b.status != "cancelled" and user.role != "viewer" %}
   <p class="muted">Le client le réalise depuis son téléphone. Vous pouvez aussi le saisir vous-même :</p>
   <details><summary class="btn small">Saisir l'état des lieux</summary>
@@ -25,11 +35,11 @@
 
 {% block content %}
 <div class="head">
-  <div><h1>{{ b.reference }} {{ source(b) }} {{ badge(b.status) }}</h1>
+  <div><h1>{{ b.reference }} {{ source(b) }} {{ badge(b.effective_status) }}{% if b.historical %} <span class="badge gray">Reprise d'historique</span>{% endif %}</h1>
     <div class="sub">{{ b.vehicle.label }} · {{ b.starts_at|dt }} → {{ b.ends_at|dt }}</div></div>
   <div class="actions">
     {% if b.source == "direct" %}<a class="btn primary" href="/locations/{{ b.id }}/contrat.pdf" target="_blank">Contrat PDF</a>{% endif %}
-    {% if b.source == "direct" and b.status in ("confirmed", "in_progress") and user.role != "viewer" %}
+    {% if b.source == "direct" and b.effective_status in ("confirmed", "in_progress") and user.role != "viewer" %}
     <form method="post" action="/locations/{{ b.id }}/annuler" data-confirm="Annuler cette location ?"><button class="btn danger">Annuler</button></form>{% endif %}
   </div>
 </div>
@@ -40,10 +50,11 @@
     <dl class="kv">
       <dt>Véhicule</dt><dd><a href="/vehicules/{{ b.vehicle.id }}">{{ b.vehicle.label }}</a></dd>
       <dt>Durée</dt><dd>{{ b.days }} jour(s)</dd>
-      <dt>{{ "Revenu propriétaire" if b.source == "getaround" else "Prix HT" }}</dt><dd class="num">{{ b.price_ht|eur }}</dd>
+      <dt>{{ "Revenu net propriétaire" if b.source == "getaround" else "Prix HT" }}</dt><dd class="num {{ 'neg' if b.price_ht < 0 }}">{{ b.price_ht|eur }}</dd>
+      {% if b.gross_amount is not none %}<dt>Détail</dt><dd class="num">{{ b.gross_amount|eur }} brut − {{ b.deductions|eur }} de retenues</dd>{% endif %}
       {% if b.source == "direct" %}<dt>Prix TTC</dt><dd class="num">{{ b.price_ttc|eur }} (TVA {{ "%g"|format(b.vat_rate) }} %)</dd>
       <dt>Km inclus</dt><dd>{{ b.km_included }} km</dd><dt>Dépôt de garantie</dt><dd class="num">{{ b.deposit|eur }}</dd>
-      <dt>Contrat</dt><dd>{% if b.accepted_at %}Accepté par {{ b.accepted_by }} le {{ b.accepted_at|dt }}{% else %}En attente d'acceptation{% endif %}</dd>{% endif %}
+      <dt>Contrat</dt><dd>{% if b.historical %}Signé hors application{% if b.contract_ref %} — contrat d'origine n° <b>{{ b.contract_ref }}</b>{% endif %}{% elif b.accepted_at %}Accepté par {{ b.accepted_by }} le {{ b.accepted_at|dt }}{% else %}En attente d'acceptation{% endif %}</dd>{% endif %}
       {% if b.source == "getaround" and b.imported_km is not none %}<dt>Km parcourus</dt><dd>{{ b.imported_km }} km</dd>{% endif %}
       {% if b.notes and b.source == "direct" %}<dt>Conditions</dt><dd>{{ b.notes }}</dd>{% endif %}
     </dl>
@@ -62,8 +73,33 @@
   </div>
 </div>
 
+{% if b.source == "direct" and user.role != "viewer" %}
+<div class="card">
+  <form method="post" action="/locations/{{ b.id }}/modifier" class="inline">
+    <div><label for="deposit">Dépôt de garantie (€)</label><input type="text" id="deposit" name="deposit" inputmode="decimal" value="{{ '%g'|format(b.deposit) }}"></div>
+    {% if b.historical %}<div><label for="contract_ref">N° de contrat d'origine</label><input type="text" id="contract_ref" name="contract_ref" value="{{ b.contract_ref }}" placeholder="SAH-2026-001"></div>{% endif %}
+    <button class="btn">Enregistrer</button>
+  </form>
+  {% if not b.historical and user.role == "admin" %}
+  <details style="margin-top:10px"><summary class="muted" style="cursor:pointer">Location déjà réalisée, saisie après coup ? Passer en reprise d'historique</summary>
+    <form method="post" action="/locations/{{ b.id }}/historique" class="inline" style="margin-top:10px"
+          data-confirm="Passer en reprise d'historique ? Le code d'accès sera retiré : plus aucun SMS ni e-mail ne partira pour cette location.">
+      <div><label for="h_ref">N° de contrat d'origine</label><input type="text" id="h_ref" name="contract_ref" placeholder="SAH-2026-001"></div>
+      <button class="btn">Passer en reprise d'historique</button>
+    </form>
+    <small class="muted">Rien n'est envoyé au client. Le contrat est marqué « Signé hors application ».</small>
+  </details>{% endif %}
+</div>
+{% endif %}
+
 {% if b.source == "direct" %}
 <div class="grid g2">
+  {% if b.historical %}
+  <div class="card">
+    <h2>Accès du client</h2>
+    <p class="muted">Reprise d'historique : pas de code d'accès, aucun SMS ni e-mail n'est envoyé pour cette location.</p>
+  </div>
+  {% else %}
   <div class="card">
     <h2>Accès du client</h2>
     <dl class="kv">
@@ -87,6 +123,7 @@
     {% endif %}
     {% if not b.vehicle.lock_code %}<div class="note warn">Renseignez le code du Master Lock sur la <a href="/vehicules/{{ b.vehicle.id }}">fiche du véhicule</a>.</div>{% endif %}
   </div>
+  {% endif %}
   <div class="card">
     <h2>Facturation</h2>
     {% for inv in b.invoices %}

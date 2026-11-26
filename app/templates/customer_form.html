@@ -13,9 +13,10 @@
   <h2>Conducteur / représentant</h2>
   <div class="grid g2">
     {{ field("first_name", "Prénom", c.first_name) }}{{ field("last_name", "Nom", c.last_name) }}
-    {{ field("phone", "Téléphone portable", c.phone, type="tel", help="Reçoit le code d'accès par SMS.") }}
-    {{ field("email", "E-mail", c.email, type="email", help="Reçoit le code d'accès par e-mail (si activé) et les factures.") }}
+    {{ field("phone", "Téléphone portable", c.phone, type="tel") }}
+    {{ field("email", "E-mail", c.email, type="email") }}
   </div>
+  <div class="note warn" style="margin-top:-4px">Renseigner le <b>téléphone</b> ou l'<b>e-mail</b> déclenche l'<b>envoi automatique du code d'accès</b> (SMS / e-mail, selon les réglages) 30 minutes avant le départ de chaque future location directe de ce client. Les locations en reprise d'historique ne déclenchent jamais d'envoi.</div>
   {{ field("address", "Adresse", c.address) }}
   <div class="grid g3">{{ field("postal_code", "Code postal", c.postal_code) }}{{ field("city", "Ville", c.city) }}{{ field("country", "Pays", c.country) }}</div>
   <h2>Permis de conduire <small class="muted" style="font-weight:400">— utile pour désigner le conducteur en cas de contravention</small></h2>
@@ -29,6 +30,6 @@
 </form>
 {% if bookings %}
 <div class="card flush" style="max-width:760px"><table><thead><tr><th>Location</th><th>Véhicule</th><th>Départ</th><th>Statut</th></tr></thead>
-<tbody>{% for b in bookings %}<tr class="link" data-href="/locations/{{ b.id }}"><td><a href="/locations/{{ b.id }}">{{ b.reference }}</a></td><td>{{ b.vehicle.name }}</td><td>{{ b.starts_at|dt }}</td><td>{{ badge(b.status) }}</td></tr>{% endfor %}</tbody></table></div>
+<tbody>{% for b in bookings %}<tr class="link" data-href="/locations/{{ b.id }}"><td><a href="/locations/{{ b.id }}">{{ b.reference }}</a></td><td>{{ b.vehicle.name }}</td><td>{{ b.starts_at|dt }}</td><td>{{ badge(b.effective_status) }}</td></tr>{% endfor %}</tbody></table></div>
 {% endif %}
 {% endblock %}

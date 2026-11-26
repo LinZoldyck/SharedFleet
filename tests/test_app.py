@@ -8,9 +8,9 @@ from app.timeutil import now
 from .conftest import new_client, photo
 
 
-def book(client, vehicle, customer, start, end):
+def book(client, vehicle, customer, start, end, **extra):
     return client.post("/locations", data={"vehicle_id": vehicle.id, "customer_id": customer.id,
-                                           "starts_at": start.isoformat(), "ends_at": end.isoformat()})
+                                           "starts_at": start.isoformat(), "ends_at": end.isoformat(), **extra})
 
 
 def test_pages_require_login():
@@ -154,7 +154,7 @@ def test_access_code_window(client, fleet, db):
 
 def test_dashboard_and_all_pages_render(client, fleet, db):
     vehicle, customer = fleet
-    book(client, vehicle, customer, now() - timedelta(days=2), now() - timedelta(days=1))
+    book(client, vehicle, customer, now() - timedelta(days=2), now() - timedelta(days=1), historical="on")
     client.post("/couts", data={"spent_on": now().date().isoformat(), "category": "Carburant", "amount": "60", "vehicle_id": str(vehicle.id)})
     for path in ("/", "/?p=annee", "/locations", "/locations?f=toutes", "/vehicules", "/clients", "/messages", "/contraventions",
                  "/factures", "/couts", "/reglages", "/locations/nouvelle", "/locations/1", f"/vehicules/{vehicle.id}", f"/clients/{customer.id}"):

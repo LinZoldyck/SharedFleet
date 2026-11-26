@@ -30,7 +30,7 @@
     <div class="hint">{{ d.bookings_count }} location(s) · {{ "%.0f"|format(d.direct_share) }} % en direct</div></div>
   <div class="card kpi"><div class="label">Coûts</div><div class="value">{{ d.costs|eur(0) }}</div>
     <div class="hint">{{ d.fixed_costs|eur(0) }} fixes · {{ d.variable_costs|eur(0) }} variables</div></div>
-  <div class="card kpi"><div class="label">Marge</div><div class="value">{{ d.margin|eur(0) }}</div>
+  <div class="card kpi"><div class="label">Marge</div><div class="value {{ 'neg' if d.margin < 0 }}">{{ d.margin|eur(0) }}</div>
     <div class="hint">{% if d.revenue %}{{ "%.0f"|format(d.margin_rate) }} % du chiffre d'affaires{% else %}Pas encore de revenu{% endif %}</div></div>
   <div class="card kpi"><div class="label">Taux d'occupation</div><div class="value">{{ "%.0f"|format(d.occupancy) }} %</div>
     <div class="hint">{% if d.revenue_per_rented_day %}{{ d.revenue_per_rented_day|eur(0) }} par jour loué{% else %}Temps loué / temps écoulé{% endif %}</div></div>
@@ -81,8 +81,8 @@
   <summary style="margin:0">Voir les chiffres mensuels en tableau</summary>
   <div class="scroll" style="margin-top:10px"><table>
     <thead><tr><th>Mois</th><th class="r">Getaround</th><th class="r">Direct</th><th class="r">Total</th><th class="r">Coûts</th><th class="r">Marge</th></tr></thead>
-    <tbody>{% for m in d.months %}<tr><td>{{ m.label }}</td><td class="r num">{{ m.getaround|eur(0) }}</td><td class="r num">{{ m.direct|eur(0) }}</td>
-      <td class="r num">{{ m.revenue|eur(0) }}</td><td class="r num">{{ m.costs|eur(0) }}</td><td class="r num">{{ m.margin|eur(0) }}</td></tr>{% endfor %}</tbody>
+    <tbody>{% for m in d.months %}<tr><td>{{ m.label }}</td><td class="r num {{ 'neg' if m.getaround < 0 }}">{{ m.getaround|eur(0) }}</td><td class="r num">{{ m.direct|eur(0) }}</td>
+      <td class="r num {{ 'neg' if m.revenue < 0 }}">{{ m.revenue|eur(0) }}</td><td class="r num">{{ m.costs|eur(0) }}</td><td class="r num {{ 'neg' if m.margin < 0 }}">{{ m.margin|eur(0) }}</td></tr>{% endfor %}</tbody>
   </table></div>
 </details>
 
@@ -94,8 +94,8 @@
       <tbody>{% for x in d.per_vehicle %}
         <tr class="link" data-href="/vehicules/{{ x.vehicle.id }}"><td><b>{{ x.vehicle.name }}</b><br><small>{{ x.vehicle.plate }}</small></td>
           <td><div class="meter" title="{{ '%.0f'|format(x.occupancy) }} %"><span style="width:{{ x.occupancy }}%"></span></div><small class="num">{{ "%.0f"|format(x.occupancy) }} %</small></td>
-          <td class="r num">{{ x.count }}</td><td class="r num">{{ x.revenue|eur(0) }}</td><td class="r num">{{ x.costs|eur(0) }}</td>
-          <td class="r num"><b>{{ x.margin|eur(0) }}</b></td></tr>{% endfor %}
+          <td class="r num">{{ x.count }}</td><td class="r num {{ 'neg' if x.revenue < 0 }}">{{ x.revenue|eur(0) }}</td><td class="r num">{{ x.costs|eur(0) }}</td>
+          <td class="r num {{ 'neg' if x.margin < 0 }}"><b>{{ x.margin|eur(0) }}</b></td></tr>{% endfor %}
       </tbody>
     </table></div>
   </div>
@@ -103,7 +103,7 @@
     <h2>Prochaines locations</h2>
     {% for b in d.upcoming %}
     <a href="/locations/{{ b.id }}" style="display:block;color:inherit;padding:8px 0;border-bottom:1px solid var(--line)">
-      <b>{{ b.vehicle.name }}</b> {{ source(b) }} {{ badge(b.status) }}<br>
+      <b>{{ b.vehicle.name }}</b> {{ source(b) }} {{ badge(b.effective_status) }}<br>
       <small>{{ b.starts_at|dt }} → {{ b.ends_at|dt }}{% if b.customer %} · {{ b.customer.label }}{% endif %}</small>
     </a>
     {% else %}<div class="empty"><b>Aucune location à venir</b>Les véhicules sont tous disponibles.</div>{% endfor %}

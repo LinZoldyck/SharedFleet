@@ -20,6 +20,13 @@
     {{ field("price_ht", "Prix total HT (€)", optional=true, placeholder="Calculé d'après le tarif journalier", help="Laissez vide pour appliquer le tarif du véhicule.", attrs='inputmode="decimal"') }}
     <div class="field"><label for="vat_rate">TVA</label><select id="vat_rate" name="vat_rate"><option value="20">20 %</option><option value="0">0 % (non assujetti)</option></select></div>
   </div>
+  {{ field("deposit", "Dépôt de garantie (€)", optional=true, placeholder="Valeur du véhicule", help="Laissez vide pour reprendre le dépôt réglé sur la fiche du véhicule.", attrs='inputmode="decimal"') }}
+  <div class="field" style="background:#fafbff;border:1px solid var(--line);border-radius:12px;padding:12px 14px">
+    <label class="check"><input type="checkbox" name="historical"> <span>Location déjà réalisée / reprise d'historique</span></label>
+    <div class="help" style="margin:4px 0 10px 26px">Aucun code d'accès, ni SMS ni e-mail au client, calendrier Getaround inchangé, pas d'état des lieux demandé, contrat marqué « Signé hors application ». Obligatoire si le départ est dans le passé.</div>
+    <div style="margin-left:26px"><label for="contract_ref">N° de contrat d'origine <span class="opt">(facultatif)</span></label>
+      <input type="text" id="contract_ref" name="contract_ref" placeholder="SAH-2026-001" style="max-width:260px"></div>
+  </div>
   <div class="field"><label for="notes">Conditions particulières <span class="opt">(facultatif, imprimées sur le contrat)</span></label><textarea id="notes" name="notes"></textarea></div>
   <div class="actions"><button class="btn primary">Créer la location et le contrat</button><a class="btn" href="/locations">Annuler</a></div>
 </form>

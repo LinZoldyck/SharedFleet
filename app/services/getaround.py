@@ -9,6 +9,9 @@ import hashlib
 import hmac
 import logging
 import re
+import threading
+import time
+from collections import deque
 from datetime import datetime, timedelta
 
 import httpx
@@ -20,6 +23,9 @@ from . import settings
 
 log = logging.getLogger("sharedfleet.getaround")
 BASE_URL = "https://api-eu.getaround.com/owner/v1"
+RATE_LIMIT = 90  # appels par minute, sous les 100 autorisés
+_calls: deque = deque()  # horodatage des derniers appels (partagé par tout le processus)
+_rate_lock = threading.Lock()
 
 
 class GetaroundError(Exception):
@@ -31,9 +37,23 @@ class GetaroundClient:
         self.http = httpx.Client(base_url=BASE_URL, timeout=30, transport=transport, headers={
             "Authorization": f"Bearer {token}", "Accept": "application/json", "Content-Type": "application/json"})
 
+    def _throttle(self) -> None:
+        """Reste sous la limite Getaround (100 appels / minute / IP) : attend si 90 appels ont eu lieu en 60 s."""
+        with _rate_lock:
+            t = time.monotonic()
+            while _calls and _calls[0] < t - 60:
+                _calls.popleft()
+            if len(_calls) >= RATE_LIMIT:
+                time.sleep(max(0.0, _calls[0] + 60 - t))
+            _calls.append(time.monotonic())
+
     def _request(self, method: str, url: str, **kw):
         try:
+            self._throttle()
             r = self.http.request(method, url, **kw)
+            if r.status_code == 429:  # limite atteinte malgré tout (autre appareil, même IP) : une seule nouvelle tentative
+                time.sleep(min(60.0, float(r.headers.get("retry-after") or 30)))
+                r = self.http.request(method, url, **kw)
             r.raise_for_status()
         except httpx.HTTPStatusError as exc:
             code = exc.response.status_code
@@ -210,12 +230,15 @@ def sync_rental(db: Session, org: Organization, api: GetaroundClient, rental_id,
         db.add(booking)
     booking.vehicle_id = vehicle.id
     booking.starts_at, booking.ends_at = to_local(r["starts_at"]), to_local(r["ends_at"])
-    cents = (r.get("price") or 0) + ((r.get("insurance_fee") or 0) if settings.get(org, "getaround_include_insurance") else 0)
-    booking.price_ht = cents / 100  # l'API exprime les montants en centimes
-    try:
-        booking.customer = _upsert_driver(db, org, api, r["user_id"])
-    except GetaroundError as exc:
-        log.warning("Conducteur %s illisible : %s", r.get("user_id"), exc)
+    if booking.deductions is None:  # un revenu net importé (avec ses retenues) est plus juste que le prix de l'API
+        cents = (r.get("price") or 0) + ((r.get("insurance_fee") or 0) if settings.get(org, "getaround_include_insurance") else 0)
+        booking.price_ht = cents / 100  # l'API exprime les montants en centimes
+    known = booking.customer and booking.customer.getaround_user_id == r.get("user_id")
+    if not known:  # conducteur déjà connu : inutile de le recharger à chaque synchronisation
+        try:
+            booking.customer = _upsert_driver(db, org, api, r["user_id"])
+        except GetaroundError as exc:
+            log.warning("Conducteur %s illisible : %s", r.get("user_id"), exc)
     if booking.status != "cancelled":
         booking.status = status_for(booking.starts_at, booking.ends_at)
     db.commit()
@@ -248,17 +271,29 @@ def sync_messages(db: Session, org: Organization, api: GetaroundClient, booking:
     return fresh
 
 
-def sync_all(db: Session, org: Organization, days_back: int = 30, days_ahead: int = 60) -> dict:
+# /rentals.json filtre sur la DATE DE RÉSERVATION (« Find rentals booked between dates ») : on remonte assez loin
+# pour couvrir les locations réservées longtemps à l'avance ; une fenêtre dans le futur ne renverrait rien.
+BOOKED_DAYS_BACK = 90
+
+
+def sync_all(db: Session, org: Organization, days_back: int = BOOKED_DAYS_BACK, days_ahead: int = 0) -> dict:
     """Synchronisation complète : voitures, locations de la fenêtre, messages des locations récentes."""
     api = client_for(org)
     if not api:
         raise GetaroundError("Jeton Getaround non configuré.")
     from .assistant import handle_incoming  # import tardif : évite la dépendance circulaire
 
-    stats = {"cars": sync_cars(db, org, api), "rentals": 0, "messages": 0, "ignored": 0}
+    stats = {"cars": sync_cars(db, org, api), "rentals": 0, "messages": 0, "ignored": 0, "skipped": 0}
     t = now()
     tried_cars: set = set()  # voitures dont la fiche a déjà été demandée pendant cette synchronisation
+    # Locations déjà complètes (conducteur connu) et terminées depuis plus de 7 jours : elles ne bougent plus
+    settled = {b.external_id for b in db.query(Booking).filter(
+        Booking.org_id == org.id, Booking.source == "getaround", Booking.customer_id.is_not(None),
+        Booking.ends_at < t - timedelta(days=7))}
     for rid in api.rental_ids(t - timedelta(days=days_back), t + timedelta(days=days_ahead)):
+        if str(rid) in settled:
+            stats["skipped"] += 1
+            continue
         if sync_rental(db, org, api, rid, relink=False, tried_cars=tried_cars):  # liste des voitures déjà lue au-dessus
             stats["rentals"] += 1
         else:
@@ -302,13 +337,26 @@ def handle_webhook(db: Session, org: Organization, event: dict) -> str:
     return "ok"
 
 
+def calendar_skip_reason(org: Organization, booking: Booking) -> str | None:
+    """Pourquoi le créneau ne sera PAS bloqué sur Getaround (None = il le sera)."""
+    if booking.historical:
+        return "reprise d'historique"
+    if not settings.get(org, "getaround_block_calendar"):
+        return "option désactivée dans les réglages"
+    if not settings.has(org, "getaround_token"):
+        return "Getaround n'est pas connecté (aucun jeton d'API)"
+    if not booking.vehicle.getaround_car_id:
+        return f"{booking.vehicle.name} n'est pas relié à sa voiture Getaround"
+    return None
+
+
 def block_calendar(org: Organization, booking: Booking, release: bool = False) -> str | None:
     """Pose (ou retire) une indisponibilité Getaround pour une location directe, afin d'éviter la double réservation.
 
     Retourne un message d'erreur lisible, ou None si tout va bien / rien à faire.
     """
     api = client_for(org)
-    if not api or not settings.get(org, "getaround_block_calendar") or not booking.vehicle.getaround_car_id:
+    if not api or calendar_skip_reason(org, booking):
         return None
     try:
         if release:
@@ -320,7 +368,7 @@ def block_calendar(org: Organization, booking: Booking, release: bool = False) -
     return None
 
 
-def diagnose(db: Session, org: Organization, days_back: int = 30, days_ahead: int = 60) -> list[dict]:
+def diagnose(db: Session, org: Organization, days_back: int = BOOKED_DAYS_BACK, days_ahead: int = 0) -> list[dict]:
     """Vérifie la connexion étape par étape. Chaque étape : {ok, title, detail, lines}. S'arrête à la première
     étape bloquante. Limité à une vingtaine d'appels pour rester loin de la limite de 100 par minute."""
     steps: list[dict] = []
@@ -385,7 +433,8 @@ def diagnose(db: Session, org: Organization, days_back: int = 30, days_ahead: in
             rental_lines.append(f"Location {rid} : lecture impossible ({exc})")
     step(bool(ids), "Locations accessibles",
          f"{len(ids)} location(s) réservée(s) entre le {start:%d/%m/%Y} et le {end:%d/%m/%Y}." if ids else
-         f"Aucune location réservée entre le {start:%d/%m/%Y} et le {end:%d/%m/%Y}.", rental_lines)
+         f"Aucune location réservée entre le {start:%d/%m/%Y} et le {end:%d/%m/%Y} (Getaround filtre sur la date de "
+         "réservation, pas sur la date de location).", rental_lines)
 
     try:
         invoices = api.invoice_ids(t - timedelta(days=30), t)

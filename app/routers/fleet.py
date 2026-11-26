@@ -88,8 +88,8 @@ async def customer_save(cid: int, request: Request, user: User = Depends(manager
     form = await _fill(c, request, ("company_name", "siret", "vat_number", "first_name", "last_name", "email", "phone",
                                     "address", "postal_code", "city", "country", "license_number", "license_country"),
                        dates=("birth_date", "license_date"))
-    if not (c.company_name or c.last_name):
-        flash(request, "Indiquez une raison sociale ou un nom.", "error")
+    if not (c.company_name or c.last_name or c.first_name):
+        flash(request, "Indiquez une raison sociale, un nom ou un prénom.", "error")
         return redirect(f"/clients/{cid}" if cid else "/clients/nouveau")
     db.add(c)
     db.commit()

@@ -5,7 +5,8 @@
   <div><h1>Locations</h1><div class="sub">Getaround et locations directes, au même endroit</div></div>
   <div class="actions">
     <form method="post" action="/getaround/synchroniser"><button class="btn">Synchroniser Getaround</button></form>
-    {% if user.role != "viewer" %}<a class="btn" href="/locations/import-getaround">Importer des locations Getaround</a>{% endif %}
+    {% if user.role != "viewer" %}<a class="btn" href="/locations/import-getaround">Importer des locations Getaround</a>
+    <a class="btn" href="/locations/import-directes">Importer des locations directes passées</a>{% endif %}
     <a class="btn primary" href="/locations/nouvelle">+ Nouvelle location directe</a>
   </div>
 </div>
@@ -43,7 +44,7 @@
         <td>{{ b.vehicle.name }}<br><small>{{ b.vehicle.plate }}</small></td>
         <td>{{ b.renter_label or "—" }}</td>
         <td>{{ b.starts_at|dt }}</td><td>{{ b.ends_at|dt }}</td>
-        <td class="r num">{{ b.price_ht|eur }}</td><td>{{ badge(b.status) }}</td>
+        <td class="r num {{ 'neg' if b.price_ht < 0 }}">{{ b.price_ht|eur }}</td><td>{{ badge(b.effective_status) }}{% if b.historical %}<br><small class="muted">historique{{ " · " ~ b.contract_ref if b.contract_ref }}</small>{% endif %}</td>
       </tr>{% endfor %}
     </tbody>
   </table>

@@ -141,7 +141,11 @@ def _build(org, story, title) -> bytes:
 def contract_pdf(org: Organization, booking: Booking) -> bytes:
     v, c = booking.vehicle, booking.customer
     g = lambda k: settings.get(org, k)  # noqa: E731
-    story = _header(org, f"Contrat de location n° {booking.reference}", f"Édité le {fdt(booking.created_at)}")
+    title = f"Contrat de location n° {booking.contract_ref or booking.reference}" if booking.historical else \
+        f"Contrat de location n° {booking.reference}"
+    subtitle = (f"Reprise d'historique — référence SharedFleet {booking.reference} · contrat signé hors application"
+                if booking.historical else f"Édité le {fdt(booking.created_at)}")
+    story = _header(org, title, subtitle)
 
     lessor = "\n".join(x for x in (g("company_name") or org.name, g("company_address"),
                                    f"{g('company_postal_code')} {g('company_city')}".strip(),
@@ -180,7 +184,10 @@ def contract_pdf(org: Organization, booking: Booking) -> bytes:
         if line.strip():
             story.append(p(line.strip(), "terms"))
 
-    if booking.accepted_at:
+    if booking.historical:
+        accept = ("Contrat signé hors application" + (f" (contrat d'origine n° {booking.contract_ref})" if booking.contract_ref else "")
+                  + ". Ce document est un récapitulatif établi lors de la reprise d'historique.")
+    elif booking.accepted_at:
         accept = (f"Contrat accepté électroniquement par {booking.accepted_by} le {fdt(booking.accepted_at)}"
                   f" (adresse IP {booking.accepted_ip}).")
     else:
