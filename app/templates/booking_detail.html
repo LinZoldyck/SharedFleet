@@ -38,7 +38,7 @@
   <div><h1>{{ b.reference }} {{ source(b) }} {{ badge(b.effective_status) }}{% if b.historical %} <span class="badge gray">Reprise d'historique</span>{% endif %}</h1>
     <div class="sub">{{ b.vehicle.label }} · {{ b.starts_at|dt }} → {{ b.ends_at|dt }}</div></div>
   <div class="actions">
-    {% if b.source == "direct" %}<a class="btn primary" href="/locations/{{ b.id }}/contrat.pdf" target="_blank">Contrat PDF</a>{% endif %}
+    {% if b.source == "direct" %}<a class="btn primary" href="/locations/{{ b.id }}/contrat.pdf?v={{ b.contract_version }}" target="_blank">Contrat PDF</a>{% endif %}
     {% if b.source == "direct" and b.effective_status in ("confirmed", "in_progress") and user.role != "viewer" %}
     <form method="post" action="/locations/{{ b.id }}/annuler" data-confirm="Annuler cette location ?"><button class="btn danger">Annuler</button></form>{% endif %}
   </div>
@@ -135,6 +135,8 @@
   </div>
 </div>
 {% endif %}
+
+{% if settlement %}{% include "_settlement.html" %}{% endif %}
 
 <div class="grid g2">
   {{ inspection_card("checkin", "État des lieux de départ") }}

@@ -52,6 +52,9 @@ class Vehicle(Base):
     extra_km_price: Mapped[float] = mapped_column(Float, default=0.30)
     deposit: Mapped[float] = mapped_column(Float, default=1000)
     monthly_cost: Mapped[float] = mapped_column(Float, default=0)  # coûts fixes mensuels (leasing, assurance…)
+    # Décompte du carburant à la restitution : 0 = non renseigné (seul l'écart de niveau est indiqué au client)
+    fuel_tank_liters: Mapped[float] = mapped_column(Float, default=0)  # capacité du réservoir, en litres
+    fuel_price: Mapped[float] = mapped_column(Float, default=0)  # prix du litre refacturé / remboursé, TTC
     getaround_car_id: Mapped[Optional[int]] = mapped_column(Integer, index=True)
     active: Mapped[bool] = mapped_column(default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now)
@@ -132,6 +135,20 @@ class Booking(Base):
 
     def inspection(self, kind: str) -> Optional["Inspection"]:
         return next((i for i in self.inspections if i.kind == kind), None)
+
+    @property
+    def contract_stage(self) -> str:
+        """Étape du contrat, pour nommer le fichier : un PDF différent à chaque étape (le téléphone ne ressert pas l'ancien)."""
+        return "final" if self.inspection("checkout") else "depart" if self.inspection("checkin") else "initial"
+
+    @property
+    def contract_version(self) -> str:
+        stamps = [f"{i.kind}{i.created_at:%Y%m%d%H%M%S}{len(i.photos)}" for i in sorted(self.inspections, key=lambda i: i.kind)]
+        return "-".join(stamps) or "0"
+
+    @property
+    def contract_filename(self) -> str:
+        return f"contrat-{self.reference}-{self.contract_stage}.pdf"
 
     @property
     def effective_status(self) -> str:

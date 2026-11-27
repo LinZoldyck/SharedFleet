@@ -47,7 +47,8 @@ def vehicle_edit(vid: int, request: Request, user: User = Depends(current_user),
 async def vehicle_save(vid: int, request: Request, user: User = Depends(manager), db: Session = Depends(get_db)):
     v = owned(db, Vehicle, vid, user) if vid else Vehicle(org_id=user.org_id)
     form = await _fill(v, request, ("name", "plate", "brand", "model", "address", "lock_code"),
-                       floats=("daily_rate", "extra_km_price", "deposit", "monthly_cost"), ints=("km_included",))
+                       floats=("daily_rate", "extra_km_price", "deposit", "monthly_cost", "fuel_tank_liters", "fuel_price"),
+                       ints=("km_included",))
     v.plate = v.plate.upper()
     v.active = form.get("active") == "on"
     if not v.name or not v.plate:

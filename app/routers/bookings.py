@@ -143,14 +143,15 @@ def booking_detail(bid: int, request: Request, user: User = Depends(current_user
     b = owned(db, Booking, bid, user)
     return render(request, "booking_detail.html", b=b, lines=invoicing.booking_lines(b),
                   provider=invoicing.PROVIDER_LABELS, code_history=svc.code_history(db, b),
-                  email_on=email.enabled(user.org), channels=CHANNEL_LABELS)
+                  email_on=email.enabled(user.org), channels=CHANNEL_LABELS,
+                  settlement=svc.settlement(b) if b.source == "direct" else None)
 
 
 @router.get("/locations/{bid}/contrat.pdf")
 def contract(bid: int, user: User = Depends(current_user), db: Session = Depends(get_db)):
     b = owned(db, Booking, bid, user)
     return Response(pdf.contract_pdf(user.org, b), media_type="application/pdf",
-                    headers={"Content-Disposition": f'inline; filename="contrat-{b.reference}.pdf"'})
+                    headers={"Content-Disposition": f'inline; filename="{b.contract_filename}"', "Cache-Control": "no-store, max-age=0"})
 
 
 CHANNEL_LABELS = {"sms": "SMS", "email": "e-mail"}

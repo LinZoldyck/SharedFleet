@@ -40,7 +40,11 @@ def fdate(value) -> str:
     return value.strftime("%d/%m/%Y") if value else "—"
 
 
-templates.env.filters.update(eur=eur, dt=fdt, date=fdate)
+def liters(value) -> str:
+    return f"{value:.1f}".replace(".", ",") + " L"
+
+
+templates.env.filters.update(eur=eur, dt=fdt, date=fdate, liters=liters)
 templates.env.globals.update(STATUS=STATUS, ROLES=ROLES, ROLE_LEVEL=ROLE_LEVEL, now=now, config=config)
 
 

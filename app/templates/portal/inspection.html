@@ -26,7 +26,7 @@
   <div class="card">
     <h2>4. Acceptation du contrat</h2>
     <div class="field"><label for="signed_name">Votre nom et prénom</label><input type="text" id="signed_name" name="signed_name" autocomplete="name" required></div>
-    <label class="check"><input type="checkbox" name="accept" required> <span>J'ai lu et j'accepte le <a href="/acces/contrat.pdf" target="_blank">contrat de location</a> et je certifie l'exactitude de cet état des lieux.</span></label>
+    <label class="check"><input type="checkbox" name="accept" required> <span>J'ai lu et j'accepte le <a href="/acces/contrat.pdf?v={{ b.contract_version }}" target="_blank">contrat de location</a> et je certifie l'exactitude de cet état des lieux.</span></label>
   </div>
   {% endif %}
   <button class="btn primary big">{{ "Valider et démarrer la location" if kind == "checkin" else "Valider le retour du véhicule" }}</button>

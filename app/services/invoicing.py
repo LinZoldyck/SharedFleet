@@ -28,12 +28,18 @@ def booking_lines(b: Booking) -> list[dict]:
     lines = [{"label": f"Location {b.vehicle.brand} {b.vehicle.model} ({b.vehicle.plate}) du "
                        f"{b.starts_at:%d/%m/%Y %Hh%M} au {b.ends_at:%d/%m/%Y %Hh%M} — contrat {b.reference}",
               "quantity": 1, "unit_price": round(b.price_ht, 2), "vat_rate": b.vat_rate}]
-    cin, cout = b.inspection("checkin"), b.inspection("checkout")
-    if b.km_included and cin and cout and cin.mileage is not None and cout.mileage is not None:
-        extra = cout.mileage - cin.mileage - b.km_included
-        if extra > 0:
-            lines.append({"label": f"Kilomètres supplémentaires ({b.km_included} km inclus)", "quantity": extra,
-                          "unit_price": b.vehicle.extra_km_price, "vat_rate": b.vat_rate})
+    from .bookings import settlement
+
+    s = settlement(b)
+    if s and s["km"] and s["km"]["extra"]:
+        lines.append({"label": f"Kilomètres supplémentaires ({s['km']['driven']} km parcourus, {b.km_included} km inclus)",
+                      "quantity": s["km"]["extra"], "unit_price": b.vehicle.extra_km_price, "vat_rate": b.vat_rate})
+    if s and s["fuel"] and s["fuel"]["ht"]:
+        f = s["fuel"]
+        label = (f"Carburant manquant au retour ({f['start']} % au départ, {f['end']} % au retour, {str(f['liters']).replace('.', ',')} L)"
+                 if f["ht"] > 0 else
+                 f"Carburant rendu en plus — remboursement ({f['start']} % au départ, {f['end']} % au retour, {str(f['liters']).replace('.', ',')} L)")
+        lines.append({"label": label, "quantity": 1, "unit_price": f["ht"], "vat_rate": b.vat_rate})
     return lines
 
 

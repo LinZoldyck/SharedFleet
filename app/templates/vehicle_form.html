@@ -18,6 +18,11 @@
     {{ field("km_included", "Km inclus par jour", v.km_included, type="number", attrs='min="0"', help="0 = kilométrage illimité.") }}
     {{ field("extra_km_price", "Km supplémentaire HT (€)", v.extra_km_price, attrs='inputmode="decimal"') }}
   </div>
+  <h2 style="margin-top:8px">Carburant à la restitution</h2>
+  <div class="grid g2">
+    {{ field("fuel_tank_liters", "Capacité du réservoir (litres)", v.fuel_tank_liters or "", placeholder="80", attrs='inputmode="decimal"') }}
+    {{ field("fuel_price", "Prix du litre TTC (€)", v.fuel_price or "", placeholder="1,85", attrs='inputmode="decimal"', help="Sert à calculer ce que le client paie s'il rend moins de carburant, ou ce qui lui est remboursé s'il en rend plus. Laissez vide pour n'indiquer que l'écart de niveau.") }}
+  </div>
   <h2 style="margin-top:8px">Rentabilité</h2>
   {{ field("monthly_cost", "Coûts fixes mensuels HT (€)", v.monthly_cost, help="Loyer ou amortissement, assurance, boîtier, parking… Utilisé pour la marge du tableau de bord.", attrs='inputmode="decimal"') }}
   <label class="check field"><input type="checkbox" name="active" {{ 'checked' if v.active or not v.id }}> Véhicule actif (proposé à la location et compté dans le tableau de bord)</label>

@@ -178,3 +178,35 @@ def mark_historical(booking: Booking, contract_ref: str) -> None:
     booking.historical = True
     booking.contract_ref = contract_ref.strip()[:60]
     booking.access_code = None
+
+
+def settlement(b: Booking) -> dict | None:
+    """Décompte de fin de location (km supplémentaires, carburant), à partir des états des lieux.
+
+    Convention : montant positif = dû par le client, négatif = à lui rembourser. Les montants sont donnés HT (pour la
+    facture) et TTC (ce que voit le client) au taux de TVA de la location. Retourne None tant qu'il manque un état des lieux.
+    """
+    cin, cout = b.inspection("checkin"), b.inspection("checkout")
+    if not cin or not cout:
+        return None
+    v, vat = b.vehicle, 1 + (b.vat_rate or 0) / 100
+    out = {"km": None, "fuel": None, "total_ht": 0.0, "total_ttc": 0.0}
+    if cin.mileage is not None and cout.mileage is not None:
+        driven = max(0, cout.mileage - cin.mileage)
+        extra = max(0, driven - b.km_included) if b.km_included else 0
+        ht = round(extra * v.extra_km_price, 2)
+        out["km"] = {"driven": driven, "included": b.km_included, "extra": extra, "unit_ht": v.extra_km_price,
+                     "ht": ht, "ttc": round(ht * vat, 2)}
+        out["total_ht"] += ht
+    if cin.fuel_level is not None and cout.fuel_level is not None:
+        diff = cin.fuel_level - cout.fuel_level  # > 0 : rendu avec moins de carburant
+        priced = bool(v.fuel_tank_liters and v.fuel_price)
+        liters = round(abs(diff) * v.fuel_tank_liters / 100, 1) if priced else None
+        ttc = round((liters or 0) * v.fuel_price, 2) * (1 if diff > 0 else -1) if priced and diff else 0.0
+        ht = round(ttc / vat, 2)
+        out["fuel"] = {"start": cin.fuel_level, "end": cout.fuel_level, "diff": diff, "liters": liters,
+                       "price_ttc": v.fuel_price, "priced": priced, "ht": ht, "ttc": ttc}
+        out["total_ht"] += ht
+    out["total_ht"] = round(out["total_ht"], 2)
+    out["total_ttc"] = round(sum(part["ttc"] for part in (out["km"], out["fuel"]) if part), 2)
+    return out

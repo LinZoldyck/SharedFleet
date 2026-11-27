@@ -54,7 +54,7 @@ def enter_code(request: Request, code: str = Form(), db: Session = Depends(get_d
 
 @router.get("/location")
 def booking_home(request: Request, b: Booking = Depends(portal_booking), db: Session = Depends(get_db)):
-    return render(request, "portal/home.html", b=b, org=db.get(Organization, b.org_id))
+    return render(request, "portal/home.html", b=b, org=db.get(Organization, b.org_id), settlement=svc.settlement(b))
 
 
 @router.get("/etat-des-lieux/{kind}")
@@ -103,7 +103,7 @@ async def save_inspection(kind: str, request: Request, mileage: str = Form(), fu
 @router.get("/contrat.pdf")
 def contract(b: Booking = Depends(portal_booking), db: Session = Depends(get_db)):
     return Response(pdf.contract_pdf(db.get(Organization, b.org_id), b), media_type="application/pdf",
-                    headers={"Content-Disposition": f'inline; filename="contrat-{b.reference}.pdf"'})
+                    headers={"Content-Disposition": f'inline; filename="{b.contract_filename}"', "Cache-Control": "no-store, max-age=0"})
 
 
 @router.get("/photo/{pid}")

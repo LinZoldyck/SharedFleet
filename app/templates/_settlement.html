@@ -1,0 +1,23 @@
+{# Décompte de fin de location : km supplémentaires et carburant. Variables : settlement, b. #}
+{% set s = settlement %}
+<div class="card">
+  <h2>{{ "Votre décompte de fin de location" if request.url.path.startswith("/acces") else "Décompte de fin de location" }}</h2>
+  <table>
+    {% if s.km %}<tr>
+      <td style="padding:8px 0"><b>Kilométrage</b><br><small class="muted">{{ s.km.driven }} km parcourus{% if s.km.included %} · {{ s.km.included }} km inclus{% endif %}</small></td>
+      <td style="padding:8px 0">{% if s.km.extra %}{{ s.km.extra }} km supplémentaires × {{ s.km.unit_ht|eur }} HT{% else %}Aucun kilomètre supplémentaire{% endif %}</td>
+      <td class="r num" style="padding:8px 0;white-space:nowrap"><b>{{ s.km.ttc|eur }}</b> TTC</td></tr>{% endif %}
+    {% if s.fuel %}<tr>
+      <td style="padding:8px 0"><b>Carburant</b><br><small class="muted">{{ s.fuel.start }} % au départ → {{ s.fuel.end }} % au retour</small></td>
+      <td style="padding:8px 0">{% if not s.fuel.diff %}Même niveau qu'au départ : rien à régler
+        {% elif not s.fuel.priced %}{{ "Moins" if s.fuel.diff > 0 else "Plus" }} de carburant qu'au départ ({{ s.fuel.diff|abs }} %) : le montant vous sera communiqué par le loueur
+        {% elif s.fuel.diff > 0 %}{{ s.fuel.liters|liters }} manquants × {{ s.fuel.price_ttc|eur }} TTC : <b>à payer</b>
+        {% else %}{{ s.fuel.liters|liters }} rendus en plus × {{ s.fuel.price_ttc|eur }} TTC : <b>remboursés</b>{% endif %}</td>
+      <td class="r num {{ 'pos' if s.fuel.ttc < 0 }}" style="padding:8px 0;white-space:nowrap">{% if s.fuel.priced or not s.fuel.diff %}<b>{{ s.fuel.ttc|eur }}</b> TTC{% else %}—{% endif %}</td></tr>{% endif %}
+    <tr style="border-top:2px solid var(--ink)">
+      <td style="padding:10px 0" colspan="2"><b>{{ "À payer" if s.total_ttc > 0 else "À vous rembourser" if s.total_ttc < 0 else "Rien à régler" }}</b>
+        {% if s.fuel and s.fuel.diff and not s.fuel.priced %}<br><small class="muted">hors carburant, dont le montant vous sera communiqué</small>{% endif %}</td>
+      <td class="r num {{ 'pos' if s.total_ttc < 0 }}" style="padding:10px 0;white-space:nowrap;font-size:1.15rem"><b>{{ s.total_ttc|abs|eur }}</b> TTC</td></tr>
+  </table>
+  {% if b.vat_rate %}<p class="muted" style="margin:8px 0 0;font-size:.84rem">Soit {{ s.total_ht|abs|eur }} HT (TVA {{ "%g"|format(b.vat_rate) }} %). Ce montant figurera sur votre facture.</p>{% endif %}
+</div>

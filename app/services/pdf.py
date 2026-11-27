@@ -11,6 +11,7 @@ from reportlab.platypus import Image, KeepTogether, PageBreak, Paragraph, Simple
 
 from ..models import Booking, Inspection, Invoice, Organization
 from . import media, settings
+from .bookings import settlement
 
 INK = colors.HexColor("#0f172a")
 MUTED = colors.HexColor("#64748b")
@@ -178,6 +179,10 @@ def contract_pdf(org: Organization, booking: Booking) -> bytes:
          _field("Prix TTC", eur(booking.price_ttc))]], [58 * mm] * 3))
     if booking.notes:
         story += [Spacer(1, 4), p(f"Conditions particulières : {booking.notes}")]
+    photos = {kind: len(i.photos) for kind in ("checkin", "checkout") if (i := booking.inspection(kind))}
+    if photos:  # sur téléphone, on ne descend pas toujours jusqu'aux dernières pages
+        story += [Spacer(1, 4), p("États des lieux et photos en fin de document : "
+                                  + " · ".join(f"{'départ' if k == 'checkin' else 'retour'} {n} photo(s)" for k, n in photos.items()) + ".")]
 
     story.append(p("Conditions générales", "h2"))
     for line in (g("contract_terms") or "").splitlines():
@@ -198,12 +203,32 @@ def contract_pdf(org: Organization, booking: Booking) -> bytes:
     story.append(PageBreak())
     story += _inspection_block("État des lieux de départ — photos avant location", booking.inspection("checkin"))
     story += _inspection_block("État des lieux de retour — photos après location", booking.inspection("checkout"))
-    cin, cout = booking.inspection("checkin"), booking.inspection("checkout")
-    if cin and cout and cin.mileage is not None and cout.mileage is not None:
-        driven = cout.mileage - cin.mileage
-        extra = max(0, driven - booking.km_included) if booking.km_included else 0
-        story.append(p(f"Distance parcourue : {driven} km" + (
-            f" — dont {extra} km supplémentaires, soit {eur(extra * v.extra_km_price)} HT." if extra else ".")))
+    s = settlement(booking)
+    if s:
+        story.append(p("Décompte de fin de location", "h2"))
+        rows = []
+        if s["km"]:
+            k = s["km"]
+            detail = (f"{k['driven']} km parcourus pour {k['included']} km inclus : {k['extra']} km supplémentaires "
+                      f"× {eur(k['unit_ht'])} HT" if k["extra"] else
+                      f"{k['driven']} km parcourus" + (f" pour {k['included']} km inclus" if k["included"] else "") + " : aucun supplément")
+            rows.append([p("Kilométrage"), p(detail), p(eur(k["ttc"]) + " TTC", "right")])
+        if s["fuel"]:
+            f = s["fuel"]
+            level = f"{f['start']} % au départ, {f['end']} % au retour"
+            if not f["diff"]:
+                detail, amount = f"{level} : même niveau, rien à payer", eur(0)
+            elif not f["priced"]:
+                detail, amount = f"{level} : écart de {abs(f['diff'])} %, montant communiqué par le loueur", "—"
+            else:
+                detail = (f"{level} : {f['liters']:.1f} L ".replace(".", ",")
+                          + f"{'manquants' if f['diff'] > 0 else 'rendus en plus'} × {eur(f['price_ttc'])} TTC")
+                amount = eur(f["ttc"]) + " TTC"
+            rows.append([p("Carburant"), p(detail), p(amount, "right")])
+        total = s["total_ttc"]
+        rows.append([p("TOTAL", "label"), p("À payer par le locataire" if total > 0 else "À rembourser au locataire" if total < 0 else "Rien à régler"),
+                     Paragraph(f"<b>{eur(abs(total))} TTC</b>", S["right"])])
+        story.append(_grid(rows, [30 * mm, 110 * mm, 34 * mm]))
     return _build(org, story, f"Contrat {booking.reference}")
 
 

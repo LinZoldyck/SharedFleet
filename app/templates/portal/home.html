@@ -14,7 +14,8 @@
     {% if b.vehicle.address %}<dt>Adresse</dt><dd>{{ b.vehicle.address }}</dd>{% endif %}
     <dt>Km inclus</dt><dd>{{ b.km_included if b.km_included else "Illimité" }}{{ " km" if b.km_included }}</dd>
   </dl>
-  <a class="btn" href="/acces/contrat.pdf" target="_blank" style="margin-top:12px;width:100%">Lire mon contrat de location (PDF)</a>
+  <a class="btn" href="/acces/contrat.pdf?v={{ b.contract_version }}" target="_blank" style="margin-top:12px;width:100%">
+    {{ "Télécharger mon contrat final (avec photos)" if cout else "Télécharger mon contrat (avec les photos de départ)" if cin else "Lire mon contrat de location (PDF)" }}</a>
 </div>
 
 {% if not cout %}
@@ -43,7 +44,15 @@
   <h2>Dernière étape : rendre les clés</h2>
   <p>Replacez les clés dans la boîte à clés, refermez-la avec ce code puis brouillez les molettes :</p>
   <div class="lockcode">{{ b.vehicle.lock_code or "—" }}</div>
-  <p><b>Merci et à bientôt !</b> Vous avez parcouru {{ cout.mileage - cin.mileage if cin.mileage is not none and cout.mileage is not none else "—" }} km. Votre contrat complet, avec les photos de départ et de retour, reste téléchargeable ci-dessus.</p>
+  <p><b>Merci et à bientôt !</b> Votre contrat complet, avec les photos de départ et de retour, reste téléchargeable ci-dessus.</p>
 </div>
+{% if settlement %}{% include "_settlement.html" %}{% endif %}
 {% endif %}
+
+{% for insp, title in ((cin, "Vos photos de départ"), (cout, "Vos photos de retour")) if insp and insp.photos %}
+<div class="card">
+  <h2>{{ title }} <small class="muted" style="font-weight:400">· {{ insp.photos|length }} photo(s) · {{ insp.created_at|dt }}</small></h2>
+  <div class="photos">{% for ph in insp.photos %}<a href="/acces/photo/{{ ph.id }}" target="_blank"><img src="/acces/photo/{{ ph.id }}" loading="lazy" alt="Photo {{ 'extérieur' if ph.category == 'exterior' else 'intérieur' }}"></a>{% endfor %}</div>
+</div>
+{% endfor %}
 {% endblock %}
