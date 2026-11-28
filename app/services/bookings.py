@@ -143,8 +143,10 @@ def find_by_code(db: Session, code: str) -> Booking | None:
 
 
 def save_inspection(db: Session, booking: Booking, kind: str, mileage: int | None, fuel_level: int | None,
-                    notes: str, exterior: list[bytes], interior: list[bytes]):
-    """Enregistre un état des lieux (départ ou retour) avec ses photos et fait avancer le statut de la location."""
+                    notes: str, exterior: list, interior: list):
+    """Enregistre un état des lieux (départ ou retour) avec ses photos et fait avancer le statut de la location.
+
+    Chaque photo est soit des octets, soit un couple (octets, intitulé de la prise de vue)."""
     from ..models import Inspection, Photo
     from . import media
 
@@ -155,9 +157,10 @@ def save_inspection(db: Session, booking: Booking, kind: str, mileage: int | Non
     inspection.mileage, inspection.fuel_level, inspection.notes = mileage, fuel_level, notes.strip()
     inspection.created_at = now()
     for category, files in (("exterior", exterior), ("interior", interior)):
-        for data in files:
+        for item in files:
+            data, label = item if isinstance(item, tuple) else (item, "")
             path = media.save_image(booking.org_id, f"photos/location_{booking.id}", data)
-            inspection.photos.append(Photo(category=category, path=path))
+            inspection.photos.append(Photo(category=category, path=path, label=label))
     booking.status = "in_progress" if kind == "checkin" else "completed"
     db.commit()
     return inspection

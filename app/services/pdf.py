@@ -87,13 +87,13 @@ def _photos(inspection: Inspection):
     """Grille de photos (3 par ligne) d'un état des lieux."""
     flow = []
     for category, title in (("exterior", "Extérieur"), ("interior", "Intérieur")):
-        paths = [media.absolute(ph.path) for ph in inspection.photos if ph.category == category]
-        paths = [x for x in paths if x]
-        if not paths:
+        shots = [(media.absolute(ph.path), ph.label) for ph in inspection.photos if ph.category == category]
+        shots = [(x, label) for x, label in shots if x]
+        if not shots:
             continue
-        flow.append(p(f"{title} — {len(paths)} photo(s)", "label"))
+        flow.append(p(f"{title} — {len(shots)} photo(s)", "label"))
         flow.append(Spacer(1, 3))
-        cells = [_fit_image(x, 55 * mm, 42 * mm) for x in paths]
+        cells = [[_fit_image(x, 55 * mm, 38 * mm), p(label or "Autre photo", "small")] for x, label in shots]
         rows = [cells[i:i + 3] + [""] * (3 - len(cells[i:i + 3])) for i in range(0, len(cells), 3)]
         t = Table(rows, colWidths=[58 * mm] * 3)
         t.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("ALIGN", (0, 0), (-1, -1), "CENTER"),

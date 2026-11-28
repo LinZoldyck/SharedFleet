@@ -2,21 +2,34 @@
 {% block content %}
 <h1 style="margin-bottom:4px">{{ "État des lieux de départ" if kind == "checkin" else "État des lieux de retour" }}</h1>
 <p class="muted">{{ b.vehicle.brand }} {{ b.vehicle.model }} · {{ b.vehicle.plate }}</p>
-<form method="post" action="/acces/etat-des-lieux/{{ kind }}" enctype="multipart/form-data">
+<form method="post" action="/acces/etat-des-lieux/{{ kind }}" enctype="multipart/form-data" data-guided>
+{% macro slot_card(slot) %}
+  <label class="slot" data-slot-card>
+    <input type="file" class="slot-input" name="{{ slot.key }}" accept="image/*" capture="environment" data-slot
+           {% if slot.required %}data-required{% endif %} aria-label="Photo : {{ slot.label }}">
+    <span class="slot-art">{{ illustration(slot) }}</span>
+    <img class="slot-photo" alt="Photo prise : {{ slot.label }}">
+    <span class="slot-check" aria-hidden="true">✓</span>
+    <span class="slot-title">{{ slot.label }}{% if slot.required %} <span class="badge amber">obligatoire</span>{% endif %}</span>
+    <small class="slot-hint">{{ slot.hint }}</small>
+    <span class="slot-action">📷 Prendre la photo</span>
+  </label>
+{% endmacro %}
   <div class="card">
-    <h2>1. Photos de l'extérieur</h2>
-    <div class="drop"><b>4 photos minimum</b><div class="muted">Avant, arrière, côté gauche, côté droit — et chaque dégât visible.</div>
-      <input type="file" name="exterior" accept="image/*" multiple required data-preview="pv_ext"></div>
+    <h2>1. Photos du véhicule <span class="badge gray" id="photo-count" data-total="{{ required|length }}">0/{{ required|length }} obligatoires</span></h2>
+    <p class="muted" style="margin-bottom:12px">Appuyez sur une case : l'appareil photo s'ouvre. Placez-vous à l'endroit de la pastille bleue
+      et cadrez les faces en couleur.{% if kind == "checkout" %} Mêmes prises de vue qu'au départ.{% endif %}</p>
+    <h3 class="slots-head" style="margin-top:4px">Obligatoires</h3>
+    <div class="slots">{% for slot in required %}{{ slot_card(slot) }}{% endfor %}</div>
+    <h3 class="slots-head">Recommandées <small class="muted">— elles vous protègent en cas de litige</small></h3>
+    <div class="slots">{% for slot in optional %}{{ slot_card(slot) }}{% endfor %}</div>
+    <div class="drop" style="margin-top:14px"><b>Autres photos</b><div class="muted">Chaque rayure, choc ou dégât visible, de près.</div>
+      <input type="file" name="exterior" accept="image/*" multiple data-preview="pv_ext" data-compress></div>
     <div class="previews" id="pv_ext"></div>
+    <p class="flash error" id="photo-missing" role="alert" hidden style="margin:12px 0 0"></p>
   </div>
   <div class="card">
-    <h2>2. Photos de l'intérieur</h2>
-    <div class="drop"><b>1 photo minimum</b><div class="muted">Cabine, zone de chargement, tableau de bord allumé.</div>
-      <input type="file" name="interior" accept="image/*" multiple required data-preview="pv_int"></div>
-    <div class="previews" id="pv_int"></div>
-  </div>
-  <div class="card">
-    <h2>3. Compteur et carburant</h2>
+    <h2>2. Compteur et carburant</h2>
     <div class="field"><label for="mileage">Kilométrage au compteur</label><input type="number" id="mileage" name="mileage" inputmode="numeric" min="0" required></div>
     <div class="field"><label for="fuel_level">Niveau de carburant : <span id="fuel_out"></span></label>
       <input type="range" id="fuel_level" name="fuel_level" min="0" max="100" step="5" value="100" data-out="fuel_out"></div>
@@ -24,7 +37,7 @@
   </div>
   {% if kind == "checkin" %}
   <div class="card">
-    <h2>4. Acceptation du contrat</h2>
+    <h2>3. Acceptation du contrat</h2>
     <div class="field"><label for="signed_name">Votre nom et prénom</label><input type="text" id="signed_name" name="signed_name" autocomplete="name" required></div>
     <label class="check"><input type="checkbox" name="accept" required> <span>J'ai lu et j'accepte le <a href="/acces/contrat.pdf?v={{ b.contract_version }}" target="_blank">contrat de location</a> et je certifie l'exactitude de cet état des lieux.</span></label>
   </div>

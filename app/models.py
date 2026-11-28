@@ -220,6 +220,7 @@ class Photo(Base):
     inspection_id: Mapped[int] = mapped_column(ForeignKey("inspections.id"), index=True)
     category: Mapped[str] = mapped_column(String(10))  # exterior | interior
     path: Mapped[str] = mapped_column(String(300))  # relatif à DATA_DIR
+    label: Mapped[str] = mapped_column(String(60), default="")  # prise de vue guidée : « 3/4 avant gauche »…
 
 
 class Message(Base):

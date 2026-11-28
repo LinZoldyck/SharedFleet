@@ -2,13 +2,14 @@
 code reçu par SMS ou e-mail → code de la boîte à clés → état des lieux de départ → … → état des lieux de retour."""
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, Response
+from starlette.datastructures import UploadFile as StarletteUploadFile
 from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..models import Booking, Organization, Photo
 from ..security import clear_attempts, client_ip, too_many_attempts
 from ..services import bookings as svc
-from ..services import media, pdf
+from ..services import media, pdf, photo_guide
 from ..timeutil import now
 from ..web import flash, read_uploads, redirect, render, to_int
 
@@ -62,7 +63,9 @@ def inspection_form(kind: str, request: Request, b: Booking = Depends(portal_boo
     expected = "checkin" if not b.inspection("checkin") else "checkout"
     if kind != expected or b.status == "completed":
         return redirect("/acces/location")
-    return render(request, "portal/inspection.html", b=b, kind=kind, org=db.get(Organization, b.org_id))
+    return render(request, "portal/inspection.html", b=b, kind=kind, org=db.get(Organization, b.org_id),
+                  required=photo_guide.REQUIRED, optional=[x for x in photo_guide.SLOTS if not x.required],
+                  illustration=photo_guide.illustration)
 
 
 @router.post("/etat-des-lieux/{kind}")
@@ -73,12 +76,25 @@ async def save_inspection(kind: str, request: Request, mileage: str = Form(), fu
     expected = "checkin" if not b.inspection("checkin") else "checkout"
     if kind != expected or b.status == "completed":
         return redirect("/acces/location")
-    ext, inte = await read_uploads(exterior), await read_uploads(interior)
+    form = await request.form()
+    guided = any(slot.key in form for slot in photo_guide.SLOTS)  # formulaire de prise de vue guidée
+    ext, inte, taken = [], [], set()
+    for slot in photo_guide.SLOTS:  # dans l'ordre des prises de vue, chacune avec son intitulé
+        upload = form.get(slot.key)
+        data = await read_uploads([upload]) if isinstance(upload, StarletteUploadFile) else []
+        if data:
+            (ext if slot.category == "exterior" else inte).append((data[0], slot.label))
+            taken.add(slot.key)
+    ext += await read_uploads(exterior)  # « autres photos » (dégâts…) et ancien formulaire
+    inte += await read_uploads(interior)
     km = to_int(mileage)
     problem = None
+    missing = [slot.label for slot in photo_guide.REQUIRED if slot.key not in taken]
     if km is None or km < 0:
         problem = "Indiquez le kilométrage affiché au compteur."
-    elif len(ext) < 4 or len(inte) < 1:
+    elif guided and missing:
+        problem = "Il manque des photos obligatoires : " + ", ".join(missing) + "."
+    elif not guided and (len(ext) < 4 or len(inte) < 1):
         problem = "Ajoutez au moins 4 photos de l'extérieur (une par côté) et 1 photo de l'intérieur."
     elif kind == "checkin" and (accept != "on" or len(signed_name.strip()) < 3):
         problem = "Saisissez votre nom et cochez la case pour accepter le contrat."

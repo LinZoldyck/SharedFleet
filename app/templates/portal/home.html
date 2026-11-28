@@ -52,7 +52,7 @@
 {% for insp, title in ((cin, "Vos photos de départ"), (cout, "Vos photos de retour")) if insp and insp.photos %}
 <div class="card">
   <h2>{{ title }} <small class="muted" style="font-weight:400">· {{ insp.photos|length }} photo(s) · {{ insp.created_at|dt }}</small></h2>
-  <div class="photos">{% for ph in insp.photos %}<a href="/acces/photo/{{ ph.id }}" target="_blank"><img src="/acces/photo/{{ ph.id }}" loading="lazy" alt="Photo {{ 'extérieur' if ph.category == 'exterior' else 'intérieur' }}"></a>{% endfor %}</div>
+  <div class="photos">{% for ph in insp.photos %}<a href="/acces/photo/{{ ph.id }}" target="_blank" class="photo-cap"><img src="/acces/photo/{{ ph.id }}" loading="lazy" alt="{{ ph.label or 'Autre photo' }}"><span>{{ ph.label or "Autre photo" }}</span></a>{% endfor %}</div>
 </div>
 {% endfor %}
 {% endblock %}

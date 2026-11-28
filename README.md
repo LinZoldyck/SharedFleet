@@ -10,7 +10,7 @@ messagerie, contraventions, facturation et tableau de bord. Conçue pour tourner
 |---|---|
 | Comptes, rôles, authentification | Une société = un espace isolé. Rôles Administrateur / Gestionnaire / Lecture seule. |
 | Contrat de location hors plateforme | PDF généré à la création de la location : logo en en-tête, conditions générales modifiables, photos **avant** et **après**. |
-| Parcours client sans contact | Code à 6 chiffres envoyé par **SMS et / ou e-mail** 30 min avant le départ → code du Master Lock → état des lieux (photos, km, carburant) → même chemin au retour. |
+| Parcours client sans contact | Code à 6 chiffres envoyé par **SMS et / ou e-mail** 30 min avant le départ → code du Master Lock → état des lieux **guidé** (une case illustrée par prise de vue : 4 angles 3/4 et tableau de bord obligatoires, face, arrière, rétroviseurs, sièges, chargement recommandés), km, carburant → même chemin au retour, avec le décompte km / carburant. |
 | Assistant de messagerie Getaround | Claude répond aux questions simples et vous transmet tout ce qui relève d'une décision. Mode brouillon ou automatique. |
 | Contraventions | Avis déposés dans un dossier (ou depuis le navigateur) → lecture → rapprochement avec la location Getaround ou directe et son conducteur. |
 | Désignation du conducteur | Extension Chrome qui remplit les champs à chaque étape ; captcha et validation restent manuels. FPS traités à part (paiement + refacturation). |

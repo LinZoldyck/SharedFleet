@@ -157,3 +157,30 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
 .grid { margin-bottom: 16px; } .grid > .card { margin-bottom: 0; } .g4 { align-items: stretch; }
 .neg, .neg b { color: var(--red); }
 .pos, .pos b { color: var(--green); }
+
+/* --- prise de vue guidée (état des lieux) --- */
+.slots { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.slots-head { font-size: .92rem; margin: 18px 0 8px; }
+.slot { position: relative; display: flex; flex-direction: column; gap: 3px; margin: 0; padding: 8px 8px 10px; border: 1.5px solid var(--line);
+  border-radius: 14px; background: #fff; cursor: pointer; font-weight: 400; transition: border-color .15s, box-shadow .15s; }
+.slot:active { transform: scale(.985); }
+.slot-input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.slot:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.slot-art svg, .slot-photo { display: block; width: 100%; aspect-ratio: 6 / 5; border-radius: 10px; background: #f8fafc; }
+.slot-photo { display: none; object-fit: cover; }
+.slot-title { font-weight: 700; font-size: .9rem; line-height: 1.25; }
+.slot-title .badge { font-size: .66rem; padding: 1px 6px; vertical-align: 1px; }
+.slot-hint { color: var(--muted); font-size: .76rem; line-height: 1.3; }
+.slot-action { margin-top: 4px; font-size: .8rem; font-weight: 700; color: var(--accent); }
+.slot-check { display: none; position: absolute; top: 14px; right: 14px; width: 26px; height: 26px; border-radius: 50%;
+  background: var(--green); color: #fff; font-weight: 700; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(0,0,0,.2); }
+.slot.done { border-color: var(--green); }
+.slot.done .slot-art { display: none; }
+.slot.done .slot-photo { display: block; }
+.slot.done .slot-check { display: flex; }
+.slot.done .slot-action { color: var(--muted); }
+.slot.busy .slot-action { color: var(--muted); }
+.slot.missing { border-color: var(--red); box-shadow: 0 0 0 3px var(--red-soft); }
+.photo-cap { display: block; color: inherit; text-decoration: none; }
+.photo-cap span { display: block; font-size: .74rem; color: var(--muted); margin-top: 3px; line-height: 1.2; }
+.photo-cap:hover { text-decoration: none; }

@@ -8,7 +8,7 @@
   {% if i %}
   <dl class="kv" style="margin-bottom:12px"><dt>Kilométrage</dt><dd class="num">{{ i.mileage if i.mileage is not none else "—" }} km</dd>
     <dt>Carburant</dt><dd>{{ i.fuel_level if i.fuel_level is not none else "—" }} %</dd><dt>Observations</dt><dd>{{ i.notes or "Aucune réserve" }}</dd></dl>
-  <div class="photos">{% for ph in i.photos %}<a href="/media/{{ ph.path }}" target="_blank"><img src="/media/{{ ph.path }}" loading="lazy" alt="Photo {{ 'extérieur' if ph.category == 'exterior' else 'intérieur' }}"></a>{% endfor %}</div>
+  <div class="photos">{% for ph in i.photos %}<a href="/media/{{ ph.path }}" target="_blank" class="photo-cap"><img src="/media/{{ ph.path }}" loading="lazy" alt="{{ ph.label or 'Photo' }}"><span>{{ ph.label or ("Extérieur" if ph.category == "exterior" else "Intérieur") }}</span></a>{% endfor %}</div>
   {% elif b.historical %}
   <p class="muted">Reprise d'historique : l'état des lieux a été fait hors application (voir le contrat d'origine{{ " " ~ b.contract_ref if b.contract_ref }}). Vous pouvez tout de même joindre des photos :</p>
   {% if user.role != "viewer" %}<details><summary class="btn small">Ajouter un état des lieux</summary>
