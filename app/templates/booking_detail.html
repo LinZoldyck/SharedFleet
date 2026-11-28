@@ -142,4 +142,21 @@
   {{ inspection_card("checkin", "État des lieux de départ") }}
   {{ inspection_card("checkout", "État des lieux de retour") }}
 </div>
+
+{% if b.source == "direct" and user.role == "admin" %}
+<div class="card" style="border-color:#fecaca">
+  <h2 style="color:var(--red)">Supprimer cette location</h2>
+  {% if delete_blocker %}
+  <p class="muted" style="margin:0">{{ delete_blocker }}</p>
+  {% else %}
+  <p class="muted">Suppression <b>définitive</b> : la location, son contrat, ses états des lieux et leurs photos sont effacés, et elle disparaît du planning et du pilotage.
+    Rien n'est envoyé au client{% if not b.historical and b.effective_status != "completed" and b.status != "cancelled" %} ; le créneau bloqué sur Getaround est libéré{% endif %}.
+    Pour garder une trace, préférez « Annuler ».</p>
+  <form method="post" action="/locations/{{ b.id }}/supprimer"
+        data-confirm="Supprimer définitivement {{ b.reference }}{{ ' (' ~ b.customer.label ~ ')' if b.customer }} ? Cette action est irréversible.">
+    <button class="btn danger">Supprimer définitivement {{ b.reference }}</button>
+  </form>
+  {% endif %}
+</div>
+{% endif %}
 {% endblock %}

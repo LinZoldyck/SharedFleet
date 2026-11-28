@@ -121,6 +121,11 @@ automatiquement chaque jour ; si Microsoft la révoque, les réglages l'indiquen
 - **Locations Getaround** : `/locations/import-getaround`. `montant` est le revenu net versé et peut être négatif
   (carburant retenu…) ; `retenues` (facultatif) garde le détail brut / retenues / net.
 
+**Supprimer une location directe** (administrateurs) : en bas de sa fiche. Suppression définitive de la location,
+de ses états des lieux et de leurs photos, sans rien envoyer au client ; le créneau bloqué sur Getaround est libéré.
+Refusée si la location est facturée ou rattachée à une contravention (annulez-la plutôt). Une trace est gardée
+(qui, quand, quoi) et une référence LOC-xxxxx supprimée n'est jamais réattribuée.
+
 Au démarrage, l'application ajoute d'elle-même à la base les colonnes apparues dans une nouvelle version
 (migration légère, sans perte de données).
 

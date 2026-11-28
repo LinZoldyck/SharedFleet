@@ -210,3 +210,62 @@ def settlement(b: Booking) -> dict | None:
     out["total_ht"] = round(out["total_ht"], 2)
     out["total_ttc"] = round(sum(part["ttc"] for part in (out["km"], out["fuel"]) if part), 2)
     return out
+
+
+class DeletionRefused(Exception):
+    pass
+
+
+def deletion_blocker(db: Session, booking: Booking) -> str | None:
+    """Raison pour laquelle la location ne peut pas être supprimée (None = suppression possible)."""
+    from ..models import Fine, Invoice
+
+    if booking.source != "direct":
+        return "Seules les locations directes peuvent être supprimées : une location Getaround s'annule sur Getaround."
+    invoices = db.query(Invoice).filter_by(booking_id=booking.id).all()
+    if invoices:
+        return (f"Cette location est facturée ({', '.join(i.number or 'brouillon' for i in invoices)}) : une facture ne "
+                "doit pas perdre sa location. Annulez plutôt la location.")
+    fines = db.query(Fine).filter_by(booking_id=booking.id).count()
+    if fines:
+        return (f"{fines} contravention(s) sont rattachées à cette location : la supprimer ferait perdre le conducteur "
+                "à désigner. Rattachez-les ailleurs ou annulez plutôt la location.")
+    return None
+
+
+def delete_direct(db: Session, org: Organization, booking: Booking, by: str) -> list[str]:
+    """Supprime définitivement une location directe, ses états des lieux et ses photos. N'envoie rien au client.
+
+    Retourne des avertissements à afficher (ex. créneau Getaround à libérer à la main).
+    """
+    from pathlib import Path
+
+    from ..models import Message
+    from . import getaround, media
+
+    reason = deletion_blocker(db, booking)
+    if reason:
+        raise DeletionRefused(reason)
+    warnings = []
+    if not booking.historical and booking.status != "cancelled" and booking.ends_at > now():
+        error = getaround.block_calendar(org, booking, release=True)  # libère le créneau bloqué à la création
+        if error:
+            warnings.append(f"Le créneau n'a pas pu être libéré sur Getaround ({error}) : libérez-le à la main.")
+    files = [media.absolute(ph.path) for i in booking.inspections for ph in i.photos]
+    c = booking.customer
+    db.add(EventLog(org_id=org.id, kind="booking_deleted", key=str(booking.id), detail=(
+        f"{booking.reference} supprimée par {by} — {booking.vehicle.label}, {booking.starts_at:%d/%m/%Y %Hh%M} → "
+        f"{booking.ends_at:%d/%m/%Y %Hh%M}, client {c.label if c else '—'}, {booking.price_ht:.2f} € HT"
+        + (f", contrat {booking.contract_ref}" if booking.contract_ref else ""))))
+    db.query(EventLog).filter_by(org_id=org.id, kind="access_code", key=f"booking:{booking.id}").delete()
+    db.query(Message).filter_by(booking_id=booking.id).delete()
+    db.delete(booking)  # états des lieux et photos suivent (cascade)
+    db.commit()
+    for path in files:  # fichiers effacés seulement une fois la suppression enregistrée
+        if path:
+            path.unlink(missing_ok=True)
+            try:
+                Path(path).parent.rmdir()  # dossier de la location, s'il est vide
+            except OSError:
+                pass
+    return warnings

@@ -123,6 +123,22 @@ def update_booking(bid: int, request: Request, deposit: str = Form(""), contract
     return redirect(f"/locations/{bid}")
 
 
+@router.post("/locations/{bid}/supprimer")
+def delete_booking(bid: int, request: Request, user: User = Depends(admin), db: Session = Depends(get_db)):
+    """Suppression définitive d'une location directe (administrateurs). Rien n'est envoyé au client."""
+    b = owned(db, Booking, bid, user)
+    reference = b.reference
+    try:
+        warnings = svc.delete_direct(db, user.org, b, by=user.name)
+    except svc.DeletionRefused as exc:
+        flash(request, str(exc), "error")
+        return redirect(f"/locations/{bid}")
+    flash(request, f"Location {reference} supprimée définitivement, avec ses états des lieux et ses photos.")
+    for w in warnings:
+        flash(request, w, "error")
+    return redirect("/locations")
+
+
 @router.post("/locations/{bid}/historique")
 def make_historical(bid: int, request: Request, contract_ref: str = Form(""), user: User = Depends(admin),
                     db: Session = Depends(get_db)):
@@ -142,6 +158,7 @@ def make_historical(bid: int, request: Request, contract_ref: str = Form(""), us
 def booking_detail(bid: int, request: Request, user: User = Depends(current_user), db: Session = Depends(get_db)):
     b = owned(db, Booking, bid, user)
     return render(request, "booking_detail.html", b=b, lines=invoicing.booking_lines(b),
+                  delete_blocker=svc.deletion_blocker(db, b),
                   provider=invoicing.PROVIDER_LABELS, code_history=svc.code_history(db, b),
                   email_on=email.enabled(user.org), channels=CHANNEL_LABELS,
                   settlement=svc.settlement(b) if b.source == "direct" else None)

@@ -4,8 +4,8 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Optional
 
-from sqlalchemy import JSON, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import JSON, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, cast, event, func, select
+from sqlalchemy.orm import Mapped, mapped_column, object_session, relationship
 
 from .db import Base
 from .timeutil import now
@@ -313,3 +313,19 @@ class EventLog(Base):
     key: Mapped[str] = mapped_column(String(200), index=True)
     detail: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now)
+
+
+@event.listens_for(Booking, "before_insert")
+def _never_reuse_booking_ids(mapper, connection, target):
+    """SQLite réattribue le plus grand identifiant s'il a été supprimé : la location suivante reprendrait alors la
+    référence LOC-xxxxx d'un contrat déjà signé. On part donc après le plus grand identifiant jamais attribué."""
+    if target.id is not None:
+        return
+    highest = connection.execute(select(func.max(Booking.id))).scalar() or 0
+    deleted = connection.execute(select(func.max(cast(EventLog.key, Integer)))
+                                 .where(EventLog.kind == "booking_deleted")).scalar() or 0
+    # Plusieurs locations dans le même enregistrement (import) : la base ne les voit pas encore, on retient le dernier
+    # numéro attribué. Au pire (enregistrement annulé), un numéro est sauté, jamais réutilisé.
+    memo = object_session(target).info
+    target.id = max(highest, deleted, memo.get("last_booking_id", 0)) + 1
+    memo["last_booking_id"] = target.id
